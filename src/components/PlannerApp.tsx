@@ -119,6 +119,15 @@ function isSameMonth(date: Date, monthKey: string) {
   return monthKeyFromDate(date) === monthKey;
 }
 
+function isWeekend(date: Date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
+function isToday(date: Date) {
+  return toDateKey(date) === toDateKey(new Date());
+}
+
 function getWeekDays(weekStartKey: string) {
   const weekStart = dateFromKey(weekStartKey);
   return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
@@ -673,16 +682,17 @@ export default function PlannerApp() {
   function renderPrintDay(date: Date, compact = false) {
     const dateKey = toDateKey(date);
     const activities = activitiesForDate(dateKey);
+    const className = [
+      "print-day",
+      isWeekend(date) ? "weekend-day" : "",
+      isToday(date) ? "current-day" : "",
+      isSameMonth(date, planner.selectedMonth) ? "" : "print-outside-month"
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
-      <section
-        className={
-          isSameMonth(date, planner.selectedMonth)
-            ? "print-day"
-            : "print-day print-outside-month"
-        }
-        key={dateKey}
-      >
+      <section className={className} key={dateKey}>
         <header>{compact ? date.getDate() : compactDayLabel(date)}</header>
         <div className="print-activity-list">
           {activities.length === 0 ? (
@@ -1045,11 +1055,17 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
+                  const className = [
+                    "day-cell",
+                    isWeekend(date) ? "weekend-day" : "",
+                    isToday(date) ? "current-day" : "",
+                    isInSelectedMonth ? "" : "outside-month"
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
                   return (
                     <section
-                      className={
-                        isInSelectedMonth ? "day-cell" : "day-cell outside-month"
-                      }
+                      className={className}
                       key={dateKey}
                       onDragLeave={isEditMode && isInSelectedMonth ? leaveDrop : undefined}
                       onDragOver={isEditMode && isInSelectedMonth ? allowDrop : undefined}
@@ -1093,13 +1109,18 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
+                  const className = [
+                    "month-day",
+                    "day-cell",
+                    isWeekend(date) ? "weekend-day" : "",
+                    isToday(date) ? "current-day" : "",
+                    isInSelectedMonth ? "" : "outside-month"
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
                   return (
                     <section
-                      className={
-                        isInSelectedMonth
-                          ? "month-day day-cell"
-                          : "month-day day-cell outside-month"
-                      }
+                      className={className}
                       key={dateKey}
                       onDragLeave={isEditMode && isInSelectedMonth ? leaveDrop : undefined}
                       onDragOver={isEditMode && isInSelectedMonth ? allowDrop : undefined}
@@ -1390,6 +1411,8 @@ export {
   getWeekDays,
   getMonthLabel,
   isSameMonth,
+  isToday,
+  isWeekend,
   monthDateFromKey,
   monthKeyFromDate,
   peoplePalette,

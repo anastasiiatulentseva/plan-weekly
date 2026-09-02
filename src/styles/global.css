@@ -437,6 +437,17 @@ h2 {
   box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.18);
 }
 
+.day-cell.weekend-day {
+  background: #f6f9fd;
+}
+
+.day-cell.current-day {
+  border-color: #93c5fd;
+  background:
+    linear-gradient(180deg, #dbeafe 0, #dbeafe 4px, transparent 4px),
+    #f8fbff;
+}
+
 .month-day {
   min-height: 128px;
 }
@@ -452,8 +463,19 @@ h2 {
 }
 
 .outside-month {
-  background: #f8fafc;
+  background: #ffffff;
   color: #94a3b8;
+}
+
+.outside-month.weekend-day {
+  background: #f3f6fa;
+}
+
+.outside-month.current-day {
+  border-color: #bfdbfe;
+  background:
+    linear-gradient(180deg, #bfdbfe 0, #bfdbfe 4px, transparent 4px),
+    #f8fafc;
 }
 
 .day-empty {
@@ -636,8 +658,30 @@ div.scheduled-main {
 }
 
 .print-outside-month {
-  background: #f8fafc;
+  background: #ffffff;
   color: #94a3b8;
+}
+
+.print-day.weekend-day {
+  background: #f6f9fd;
+}
+
+.print-day.current-day {
+  border-color: #93c5fd;
+  background:
+    linear-gradient(180deg, #dbeafe 0, #dbeafe 4px, transparent 4px),
+    #f8fbff;
+}
+
+.print-day.print-outside-month.weekend-day {
+  background: #f3f6fa;
+}
+
+.print-day.print-outside-month.current-day {
+  border-color: #bfdbfe;
+  background:
+    linear-gradient(180deg, #bfdbfe 0, #bfdbfe 4px, transparent 4px),
+    #f8fafc;
 }
 
 .print-day header {
