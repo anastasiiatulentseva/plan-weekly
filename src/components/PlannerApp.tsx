@@ -1,3 +1,10 @@
+import {
+  CalendarDays,
+  GripVertical,
+  Plus,
+  Trash2,
+  UserRoundPlus
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "plan-by-week:v1";
@@ -178,6 +185,11 @@ function loadPlanner(): PersistedPlanner {
 
 export default function PlannerApp() {
   const [planner, setPlanner] = useState<PersistedPlanner>(() => loadPlanner());
+  const [personName, setPersonName] = useState("");
+  const [activityTitle, setActivityTitle] = useState("");
+  const [activityNotes, setActivityNotes] = useState("");
+  const [activityPeople, setActivityPeople] = useState<string[]>([]);
+  const [activityColor, setActivityColor] = useState(activityPalette[0]);
 
   const monthLabel = useMemo(
     () => getMonthLabel(planner.selectedMonth),
@@ -187,6 +199,82 @@ export default function PlannerApp() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
   }, [planner]);
+
+  function addPerson(event: { preventDefault: () => void }) {
+    event.preventDefault();
+    const name = personName.trim();
+    if (!name) return;
+
+    setPlanner((current) => {
+      const color = peoplePalette[current.state.people.length % peoplePalette.length];
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          people: [
+            ...current.state.people,
+            {
+              id: createId("person"),
+              name,
+              color
+            }
+          ]
+        }
+      };
+    });
+    setPersonName("");
+  }
+
+  function toggleActivityPerson(personId: string) {
+    setActivityPeople((current) =>
+      current.includes(personId)
+        ? current.filter((id) => id !== personId)
+        : [...current, personId]
+    );
+  }
+
+  function addActivity(event: { preventDefault: () => void }) {
+    event.preventDefault();
+    const title = activityTitle.trim();
+    if (!title) return;
+
+    setPlanner((current) => ({
+      ...current,
+      state: {
+        ...current.state,
+        activityTemplates: [
+          ...current.state.activityTemplates,
+          {
+            id: createId("activity"),
+            title,
+            personIds: activityPeople,
+            color: activityColor,
+            notes: activityNotes.trim() || undefined
+          }
+        ]
+      }
+    }));
+    setActivityTitle("");
+    setActivityNotes("");
+    setActivityPeople([]);
+    setActivityColor(activityPalette[0]);
+  }
+
+  function deleteActivityTemplate(activityId: string) {
+    setPlanner((current) => ({
+      ...current,
+      state: {
+        ...current.state,
+        activityTemplates: current.state.activityTemplates.filter(
+          (activity) => activity.id !== activityId
+        )
+      }
+    }));
+  }
+
+  function personById(personId: string) {
+    return planner.state.people.find((person) => person.id === personId);
+  }
 
   return (
     <main className="planner-shell">
@@ -200,6 +288,7 @@ export default function PlannerApp() {
           </p>
         </div>
         <div className="month-card" aria-label="Selected month">
+          <CalendarDays aria-hidden="true" size={22} />
           <span>{monthLabel}</span>
           <strong>{planner.viewMode === "week" ? "Week view" : "Month view"}</strong>
         </div>
@@ -207,8 +296,45 @@ export default function PlannerApp() {
 
       <section className="planner-workspace" aria-label="Planner workspace">
         <aside className="side-panel">
-          <h2>People</h2>
-          <p className="empty-note">People setup arrives in Phase 2.</p>
+          <div className="panel-heading">
+            <div>
+              <p className="panel-kicker">Roster</p>
+              <h2>People</h2>
+            </div>
+            <UserRoundPlus aria-hidden="true" size={18} />
+          </div>
+
+          <form className="stacked-form" onSubmit={addPerson}>
+            <label htmlFor="person-name">Name</label>
+            <div className="inline-entry">
+              <input
+                id="person-name"
+                value={personName}
+                onChange={(event) => setPersonName(event.target.value)}
+                placeholder="Add a person"
+              />
+              <button aria-label="Add person" type="submit">
+                <Plus aria-hidden="true" size={18} />
+              </button>
+            </div>
+          </form>
+
+          <div className="chip-list" aria-label="Created people">
+            {planner.state.people.length === 0 ? (
+              <p className="empty-note">Add people to color-code activities.</p>
+            ) : (
+              planner.state.people.map((person) => (
+                <span className="person-chip" key={person.id}>
+                  <span
+                    aria-hidden="true"
+                    className="color-dot"
+                    style={{ backgroundColor: person.color }}
+                  />
+                  {person.name}
+                </span>
+              ))
+            )}
+          </div>
         </aside>
 
         <section className="calendar-surface">
@@ -222,8 +348,126 @@ export default function PlannerApp() {
         </section>
 
         <aside className="side-panel">
-          <h2>Activities</h2>
-          <p className="empty-note">Reusable activities arrive in Phase 2.</p>
+          <div className="panel-heading">
+            <div>
+              <p className="panel-kicker">Drag templates</p>
+              <h2>Activities</h2>
+            </div>
+            <GripVertical aria-hidden="true" size={18} />
+          </div>
+
+          <form className="stacked-form activity-form" onSubmit={addActivity}>
+            <label htmlFor="activity-title">Activity</label>
+            <input
+              id="activity-title"
+              value={activityTitle}
+              onChange={(event) => setActivityTitle(event.target.value)}
+              placeholder="Swimming, piano, playdate..."
+            />
+
+            <label htmlFor="activity-notes">Notes</label>
+            <textarea
+              id="activity-notes"
+              value={activityNotes}
+              onChange={(event) => setActivityNotes(event.target.value)}
+              placeholder="Optional details"
+              rows={3}
+            />
+
+            <fieldset>
+              <legend>People</legend>
+              <div className="person-options">
+                {planner.state.people.length === 0 ? (
+                  <p className="empty-note">Add people first if this belongs to someone.</p>
+                ) : (
+                  planner.state.people.map((person) => (
+                    <label className="check-chip" key={person.id}>
+                      <input
+                        checked={activityPeople.includes(person.id)}
+                        onChange={() => toggleActivityPerson(person.id)}
+                        type="checkbox"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="color-dot"
+                        style={{ backgroundColor: person.color }}
+                      />
+                      {person.name}
+                    </label>
+                  ))
+                )}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Activity color</legend>
+              <div className="swatch-row">
+                {activityPalette.map((color) => (
+                  <button
+                    aria-label={`Use color ${color}`}
+                    className={color === activityColor ? "swatch selected" : "swatch"}
+                    key={color}
+                    onClick={() => setActivityColor(color)}
+                    style={{ backgroundColor: color }}
+                    type="button"
+                  />
+                ))}
+              </div>
+            </fieldset>
+
+            <button className="primary-action" type="submit">
+              <Plus aria-hidden="true" size={18} />
+              Add activity
+            </button>
+          </form>
+
+          <div className="activity-list" aria-label="Reusable activities">
+            {planner.state.activityTemplates.length === 0 ? (
+              <p className="empty-note">Create reusable activities to drag onto days.</p>
+            ) : (
+              planner.state.activityTemplates.map((activity) => (
+                <article
+                  className="activity-card"
+                  draggable
+                  key={activity.id}
+                  style={{ borderLeftColor: activity.color }}
+                >
+                  <div>
+                    <h3>{activity.title}</h3>
+                    <div className="mini-chip-list">
+                      {activity.personIds.length === 0 ? (
+                        <span className="muted-label">Everyone</span>
+                      ) : (
+                        activity.personIds.map((personId) => {
+                          const person = personById(personId);
+                          if (!person) return null;
+                          return (
+                            <span className="mini-chip" key={personId}>
+                              <span
+                                aria-hidden="true"
+                                className="color-dot"
+                                style={{ backgroundColor: person.color }}
+                              />
+                              {person.name}
+                            </span>
+                          );
+                        })
+                      )}
+                    </div>
+                    {activity.notes ? <p>{activity.notes}</p> : null}
+                  </div>
+                  <button
+                    aria-label={`Delete ${activity.title}`}
+                    className="icon-button"
+                    onClick={() => deleteActivityTemplate(activity.id)}
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={16} />
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
         </aside>
       </section>
     </main>
