@@ -1,7 +1,10 @@
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   Plus,
+  Printer,
   Trash2,
   UserRoundPlus
 } from "lucide-react";
@@ -103,6 +106,42 @@ function startOfMondayWeek(date: Date) {
   return addDays(date, offset);
 }
 
+function isSameMonth(date: Date, monthKey: string) {
+  return monthKeyFromDate(date) === monthKey;
+}
+
+function getWeekDays(weekStartKey: string) {
+  const weekStart = dateFromKey(weekStartKey);
+  return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+}
+
+function getMonthWeeks(monthKey: string) {
+  const firstDay = monthDateFromKey(monthKey);
+  const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
+  const firstWeekStart = startOfMondayWeek(firstDay);
+  const lastWeekStart = startOfMondayWeek(lastDay);
+  const weeks: Date[][] = [];
+
+  for (
+    let weekStart = firstWeekStart;
+    weekStart <= lastWeekStart;
+    weekStart = addDays(weekStart, 7)
+  ) {
+    weeks.push(Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)));
+  }
+
+  return weeks;
+}
+
+function getFirstWeekStartForMonth(monthKey: string) {
+  return toDateKey(startOfMondayWeek(monthDateFromKey(monthKey)));
+}
+
+function clampWeekToMonth(weekStartKey: string, monthKey: string) {
+  const weeks = getMonthWeeks(monthKey).map((week) => toDateKey(week[0]));
+  return weeks.includes(weekStartKey) ? weekStartKey : weeks[0];
+}
+
 function getMonthLabel(monthKey: string) {
   return new Intl.DateTimeFormat("en-IE", {
     month: "long",
@@ -195,6 +234,27 @@ export default function PlannerApp() {
     () => getMonthLabel(planner.selectedMonth),
     [planner.selectedMonth]
   );
+  const visibleMonth = useMemo(
+    () => planner.state.months[planner.selectedMonth]?.scheduled ?? [],
+    [planner.selectedMonth, planner.state.months]
+  );
+  const monthWeeks = useMemo(
+    () => getMonthWeeks(planner.selectedMonth),
+    [planner.selectedMonth]
+  );
+  const selectedWeekStart = useMemo(
+    () => clampWeekToMonth(planner.selectedWeekStart, planner.selectedMonth),
+    [planner.selectedMonth, planner.selectedWeekStart]
+  );
+  const selectedWeekDays = useMemo(
+    () => getWeekDays(selectedWeekStart),
+    [selectedWeekStart]
+  );
+  const selectedWeekIndex = monthWeeks.findIndex(
+    (week) => toDateKey(week[0]) === selectedWeekStart
+  );
+  const canGoPreviousWeek = selectedWeekIndex > 0;
+  const canGoNextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < monthWeeks.length - 1;
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
@@ -276,6 +336,50 @@ export default function PlannerApp() {
     return planner.state.people.find((person) => person.id === personId);
   }
 
+  function changeMonth(amount: number) {
+    setPlanner((current) => {
+      const selectedMonth = addMonths(current.selectedMonth, amount);
+      const selectedWeekStart = getFirstWeekStartForMonth(selectedMonth);
+      return {
+        ...current,
+        selectedMonth,
+        selectedWeekStart,
+        state: ensureRollingMonths(current.state, selectedMonth)
+      };
+    });
+  }
+
+  function setViewMode(viewMode: ViewMode) {
+    setPlanner((current) => ({
+      ...current,
+      viewMode
+    }));
+  }
+
+  function changeWeek(amount: number) {
+    setPlanner((current) => {
+      const weeks = getMonthWeeks(current.selectedMonth).map((week) => toDateKey(week[0]));
+      const safeWeek = clampWeekToMonth(current.selectedWeekStart, current.selectedMonth);
+      const currentIndex = weeks.indexOf(safeWeek);
+      const nextIndex = Math.min(Math.max(currentIndex + amount, 0), weeks.length - 1);
+      return {
+        ...current,
+        selectedWeekStart: weeks[nextIndex]
+      };
+    });
+  }
+
+  function activitiesForDate(dateKey: string) {
+    return visibleMonth.filter((activity) => activity.date === dateKey);
+  }
+
+  function dayLabel(date: Date) {
+    return new Intl.DateTimeFormat("en-IE", {
+      weekday: "short",
+      day: "numeric"
+    }).format(date);
+  }
+
   return (
     <main className="planner-shell">
       <section className="planner-hero">
@@ -291,6 +395,59 @@ export default function PlannerApp() {
           <CalendarDays aria-hidden="true" size={22} />
           <span>{monthLabel}</span>
           <strong>{planner.viewMode === "week" ? "Week view" : "Month view"}</strong>
+        </div>
+      </section>
+
+      <section className="planner-toolbar" aria-label="Calendar controls">
+        <div className="month-nav">
+          <button
+            aria-label="Previous month"
+            className="secondary-button"
+            onClick={() => changeMonth(-1)}
+            type="button"
+          >
+            <ChevronLeft aria-hidden="true" size={18} />
+          </button>
+          <div>
+            <p className="panel-kicker">Selected month</p>
+            <strong>{monthLabel}</strong>
+          </div>
+          <button
+            aria-label="Next month"
+            className="secondary-button"
+            onClick={() => changeMonth(1)}
+            type="button"
+          >
+            <ChevronRight aria-hidden="true" size={18} />
+          </button>
+        </div>
+
+        <div className="segmented-control" aria-label="Calendar view">
+          <button
+            aria-pressed={planner.viewMode === "week"}
+            onClick={() => setViewMode("week")}
+            type="button"
+          >
+            Week
+          </button>
+          <button
+            aria-pressed={planner.viewMode === "month"}
+            onClick={() => setViewMode("month")}
+            type="button"
+          >
+            Month
+          </button>
+        </div>
+
+        <div className="print-actions">
+          <button className="ghost-button" type="button">
+            <Printer aria-hidden="true" size={17} />
+            Print week
+          </button>
+          <button className="ghost-button" type="button">
+            <Printer aria-hidden="true" size={17} />
+            Print month
+          </button>
         </div>
       </section>
 
@@ -338,13 +495,100 @@ export default function PlannerApp() {
         </aside>
 
         <section className="calendar-surface">
-          <div className="calendar-placeholder">
-            <h2>{monthLabel}</h2>
-            <p>
-              Calendar navigation, week/month views, drag scheduling, cloning,
-              and print controls will build on this foundation.
-            </p>
-          </div>
+          {planner.viewMode === "week" ? (
+            <div className="calendar-view">
+              <div className="calendar-view-header">
+                <div>
+                  <p className="panel-kicker">Week {selectedWeekIndex + 1}</p>
+                  <h2>
+                    {dayLabel(selectedWeekDays[0])} - {dayLabel(selectedWeekDays[6])}
+                  </h2>
+                </div>
+                <div className="week-nav">
+                  <button
+                    aria-label="Previous week"
+                    className="secondary-button"
+                    disabled={!canGoPreviousWeek}
+                    onClick={() => changeWeek(-1)}
+                    type="button"
+                  >
+                    <ChevronLeft aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    aria-label="Next week"
+                    className="secondary-button"
+                    disabled={!canGoNextWeek}
+                    onClick={() => changeWeek(1)}
+                    type="button"
+                  >
+                    <ChevronRight aria-hidden="true" size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="week-grid">
+                {selectedWeekDays.map((date) => {
+                  const dateKey = toDateKey(date);
+                  const activities = activitiesForDate(dateKey);
+                  return (
+                    <section
+                      className={
+                        isSameMonth(date, planner.selectedMonth)
+                          ? "day-cell"
+                          : "day-cell outside-month"
+                      }
+                      key={dateKey}
+                    >
+                      <header>
+                        <span>{dayLabel(date)}</span>
+                      </header>
+                      <div className="day-empty">
+                        {activities.length === 0
+                          ? "Drop activities here"
+                          : `${activities.length} planned`}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="calendar-view">
+              <div className="calendar-view-header">
+                <div>
+                  <p className="panel-kicker">Month view</p>
+                  <h2>{monthLabel}</h2>
+                </div>
+              </div>
+              <div className="month-grid">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+                  <span className="weekday-heading" key={label}>
+                    {label}
+                  </span>
+                ))}
+                {monthWeeks.flat().map((date) => {
+                  const dateKey = toDateKey(date);
+                  const activities = activitiesForDate(dateKey);
+                  return (
+                    <section
+                      className={
+                        isSameMonth(date, planner.selectedMonth)
+                          ? "month-day day-cell"
+                          : "month-day day-cell outside-month"
+                      }
+                      key={dateKey}
+                    >
+                      <header>
+                        <span>{date.getDate()}</span>
+                      </header>
+                      <div className="day-empty">
+                        {activities.length === 0 ? "Drop" : `${activities.length} planned`}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         <aside className="side-panel">
@@ -488,10 +732,15 @@ export {
   activityPalette,
   addDays,
   addMonths,
+  clampWeekToMonth,
   createId,
   dateFromKey,
   ensureRollingMonths,
+  getFirstWeekStartForMonth,
+  getMonthWeeks,
+  getWeekDays,
   getMonthLabel,
+  isSameMonth,
   monthDateFromKey,
   monthKeyFromDate,
   peoplePalette,

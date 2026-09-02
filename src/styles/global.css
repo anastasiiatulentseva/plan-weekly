@@ -142,6 +142,88 @@ h2 {
   font-size: 1.2rem;
 }
 
+.planner-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #ded9cd;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 44px rgba(48, 65, 58, 0.06);
+}
+
+.month-nav,
+.print-actions,
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-nav strong {
+  display: block;
+  min-width: 160px;
+  color: #24312e;
+  font-size: 1rem;
+}
+
+.secondary-button,
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #d8d2c5;
+  border-radius: 7px;
+  background: #fffdf8;
+  color: #30403b;
+  font-weight: 800;
+}
+
+.secondary-button {
+  width: 38px;
+  padding: 0;
+}
+
+.secondary-button:hover,
+.ghost-button:hover {
+  border-color: #bfcdbf;
+  background: #f5f8f2;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  padding: 4px;
+  border: 1px solid #d8d2c5;
+  border-radius: 8px;
+  background: #f0ede5;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border-radius: 6px;
+  background: transparent;
+  color: #57645f;
+  font-weight: 800;
+}
+
+.segmented-control button[aria-pressed="true"] {
+  background: #ffffff;
+  color: #1e2d29;
+  box-shadow: 0 8px 20px rgba(48, 65, 58, 0.1);
+}
+
 .planner-workspace {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 320px;
@@ -189,6 +271,88 @@ h2 {
 .calendar-surface {
   min-height: 520px;
   padding: 18px;
+}
+
+.calendar-view {
+  display: grid;
+  gap: 14px;
+}
+
+.calendar-view-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendar-view-header h2 {
+  margin-bottom: 0;
+  font-size: 1.35rem;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(80px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.weekday-heading {
+  color: #66736f;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.day-cell {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 340px;
+  padding: 10px;
+  border: 1px solid #ddd7ca;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+
+.month-day {
+  min-height: 128px;
+}
+
+.day-cell header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  color: #263531;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.outside-month {
+  background: #f2efe7;
+  color: #8c958f;
+}
+
+.day-empty {
+  display: grid;
+  min-height: 52px;
+  place-items: center;
+  border: 1px dashed #d9d1c4;
+  border-radius: 7px;
+  color: #89938e;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .stacked-form {
@@ -373,6 +537,23 @@ fieldset {
 }
 
 @media (max-width: 1050px) {
+  .planner-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .month-nav {
+    justify-content: space-between;
+  }
+
+  .print-actions {
+    justify-content: stretch;
+  }
+
+  .print-actions .ghost-button {
+    flex: 1;
+  }
+
   .planner-workspace {
     grid-template-columns: 1fr;
   }
@@ -390,6 +571,19 @@ fieldset {
 
   .month-card {
     min-width: 0;
+  }
+
+  .week-grid,
+  .month-grid {
+    grid-template-columns: repeat(7, minmax(72px, 1fr));
+  }
+
+  .day-cell {
+    min-height: 210px;
+  }
+
+  .month-day {
+    min-height: 110px;
   }
 }
 
