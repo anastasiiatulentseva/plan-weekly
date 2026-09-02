@@ -69,6 +69,10 @@ textarea:focus {
   padding: 28px;
 }
 
+.planner-shell.view-mode {
+  width: min(1680px, 100%);
+}
+
 .planner-hero {
   display: flex;
   align-items: end;
@@ -211,11 +215,19 @@ h2 {
 }
 
 .segmented-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 34px;
   border-radius: 6px;
   background: transparent;
   color: #57645f;
   font-weight: 800;
+}
+
+.mode-control {
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
 }
 
 .segmented-control button[aria-pressed="true"] {
@@ -229,6 +241,26 @@ h2 {
   grid-template-columns: 280px minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: start;
+}
+
+.planner-workspace.calendar-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.view-mode .calendar-surface {
+  min-height: calc(100vh - 120px);
+}
+
+.view-mode .week-grid {
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+}
+
+.view-mode .day-cell {
+  min-height: calc(100vh - 230px);
+}
+
+.view-mode .month-day {
+  min-height: 150px;
 }
 
 .side-panel,
@@ -378,6 +410,10 @@ h2 {
   box-shadow: 0 8px 20px rgba(48, 65, 58, 0.05);
 }
 
+.view-mode .scheduled-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .scheduled-main {
   display: grid;
   gap: 3px;
@@ -385,6 +421,10 @@ h2 {
   background: transparent;
   color: inherit;
   text-align: left;
+}
+
+div.scheduled-main {
+  cursor: default;
 }
 
 .scheduled-main strong {
@@ -759,6 +799,7 @@ fieldset {
   }
 
   .print-actions {
+    flex-wrap: wrap;
     justify-content: stretch;
   }
 

@@ -4,11 +4,13 @@ import {
   ChevronRight,
   Clock3,
   Copy,
+  Eye,
   Pencil,
   GripVertical,
   Plus,
   Printer,
   Trash2,
+  Wrench,
   UserRoundPlus
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -17,6 +19,7 @@ const STORAGE_KEY = "plan-by-week:v1";
 
 type ViewMode = "week" | "month";
 type PrintMode = "week" | "month";
+type AppMode = "view" | "edit";
 
 type Person = {
   id: string;
@@ -257,6 +260,8 @@ export default function PlannerApp() {
   const [activityColor, setActivityColor] = useState(activityPalette[0]);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
+  const [appMode, setAppMode] = useState<AppMode>("view");
+  const isEditMode = appMode === "edit";
 
   const monthLabel = useMemo(
     () => getMonthLabel(planner.selectedMonth),
@@ -400,6 +405,7 @@ export default function PlannerApp() {
     event: { dataTransfer: DataTransfer },
     activityId: string
   ) {
+    if (!isEditMode) return;
     event.dataTransfer.effectAllowed = "copy";
     event.dataTransfer.setData("text/plain", activityId);
   }
@@ -408,6 +414,7 @@ export default function PlannerApp() {
     preventDefault: () => void;
     currentTarget: HTMLElement;
   }) {
+    if (!isEditMode) return;
     event.preventDefault();
     event.currentTarget.classList.add("drop-ready");
   }
@@ -734,70 +741,84 @@ export default function PlannerApp() {
   }
 
   function renderScheduledActivity(activity: ScheduledActivity) {
+    const cardContent = (
+      <>
+        <strong>{activity.title}</strong>
+        <span>
+          <Clock3 aria-hidden="true" size={12} />
+          {activity.startTime} - {activity.endTime}
+        </span>
+        <span className="scheduled-people">
+          {activity.personIds.length === 0
+            ? "Everyone"
+            : activity.personIds
+                .map((personId) => personById(personId)?.name)
+                .filter(Boolean)
+                .join(", ")}
+        </span>
+      </>
+    );
+
     return (
       <article
         className="scheduled-card"
         key={activity.id}
         style={{ borderLeftColor: activity.color }}
       >
-        <button
-          className="scheduled-main"
-          onClick={() => setEditingActivityId(activity.id)}
-          type="button"
-        >
-          <strong>{activity.title}</strong>
-          <span>
-            <Clock3 aria-hidden="true" size={12} />
-            {activity.startTime} - {activity.endTime}
-          </span>
-          <span className="scheduled-people">
-            {activity.personIds.length === 0
-              ? "Everyone"
-              : activity.personIds
-                  .map((personId) => personById(personId)?.name)
-                  .filter(Boolean)
-                  .join(", ")}
-          </span>
-        </button>
-        <div className="scheduled-actions">
+        {isEditMode ? (
           <button
-            aria-label={`Edit ${activity.title}`}
-            className="icon-button"
+            className="scheduled-main"
             onClick={() => setEditingActivityId(activity.id)}
             type="button"
           >
-            <Pencil aria-hidden="true" size={14} />
+            {cardContent}
           </button>
-          <button
-            aria-label={`Delete ${activity.title}`}
-            className="icon-button"
-            onClick={() => deleteScheduledActivity(activity.id)}
-            type="button"
-          >
-            <Trash2 aria-hidden="true" size={14} />
-          </button>
-        </div>
+        ) : (
+          <div className="scheduled-main">{cardContent}</div>
+        )}
+        {isEditMode ? (
+          <div className="scheduled-actions">
+            <button
+              aria-label={`Edit ${activity.title}`}
+              className="icon-button"
+              onClick={() => setEditingActivityId(activity.id)}
+              type="button"
+            >
+              <Pencil aria-hidden="true" size={14} />
+            </button>
+            <button
+              aria-label={`Delete ${activity.title}`}
+              className="icon-button"
+              onClick={() => deleteScheduledActivity(activity.id)}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </button>
+          </div>
+        ) : null}
       </article>
     );
   }
 
   return (
-    <main className="planner-shell">
-      <section className="planner-hero">
-        <div>
-          <p className="eyebrow">Local planner</p>
-          <h1>Plan by Week</h1>
-          <p className="hero-copy">
-            A light weekly and monthly activity planner for people, routines,
-            and printable plans.
-          </p>
-        </div>
-        <div className="month-card" aria-label="Selected month">
-          <CalendarDays aria-hidden="true" size={22} />
-          <span>{monthLabel}</span>
-          <strong>{planner.viewMode === "week" ? "Week view" : "Month view"}</strong>
-        </div>
-      </section>
+    <main className={`planner-shell ${isEditMode ? "edit-mode" : "view-mode"}`}>
+      {isEditMode ? (
+        <section className="planner-hero">
+          <div>
+            <p className="eyebrow">Local planner</p>
+            <h1>Plan by Week</h1>
+            <p className="hero-copy">
+              A light weekly and monthly activity planner for people, routines,
+              and printable plans.
+            </p>
+          </div>
+          <div className="month-card" aria-label="Selected month">
+            <CalendarDays aria-hidden="true" size={22} />
+            <span>{monthLabel}</span>
+            <strong>{planner.viewMode === "week" ? "Week view" : "Month view"}</strong>
+          </div>
+        </section>
+      ) : null}
 
       <section className="planner-toolbar" aria-label="Calendar controls">
         <div className="month-nav">
@@ -823,6 +844,28 @@ export default function PlannerApp() {
           </button>
         </div>
 
+        <div className="segmented-control mode-control" aria-label="App mode">
+          <button
+            aria-pressed={appMode === "view"}
+            onClick={() => {
+              setAppMode("view");
+              setEditingActivityId(null);
+            }}
+            type="button"
+          >
+            <Eye aria-hidden="true" size={16} />
+            View
+          </button>
+          <button
+            aria-pressed={appMode === "edit"}
+            onClick={() => setAppMode("edit")}
+            type="button"
+          >
+            <Wrench aria-hidden="true" size={16} />
+            Edit
+          </button>
+        </div>
+
         <div className="segmented-control" aria-label="Calendar view">
           <button
             aria-pressed={planner.viewMode === "week"}
@@ -841,10 +884,12 @@ export default function PlannerApp() {
         </div>
 
         <div className="print-actions">
-          <button className="ghost-button" onClick={cloneToNextMonth} type="button">
-            <Copy aria-hidden="true" size={17} />
-            Clone next month
-          </button>
+          {isEditMode ? (
+            <button className="ghost-button" onClick={cloneToNextMonth} type="button">
+              <Copy aria-hidden="true" size={17} />
+              Clone next month
+            </button>
+          ) : null}
           <button
             className="ghost-button"
             onClick={() => setPrintMode("week")}
@@ -864,8 +909,12 @@ export default function PlannerApp() {
         </div>
       </section>
 
-      <section className="planner-workspace" aria-label="Planner workspace">
-        <aside className="side-panel">
+      <section
+        className={isEditMode ? "planner-workspace" : "planner-workspace calendar-only"}
+        aria-label="Planner workspace"
+      >
+        {isEditMode ? (
+          <aside className="side-panel">
           <div className="panel-heading">
             <div>
               <p className="panel-kicker">Roster</p>
@@ -906,6 +955,7 @@ export default function PlannerApp() {
             )}
           </div>
         </aside>
+        ) : null}
 
         <section className="calendar-surface">
           {planner.viewMode === "week" ? (
@@ -949,10 +999,10 @@ export default function PlannerApp() {
                         isInSelectedMonth ? "day-cell" : "day-cell outside-month"
                       }
                       key={dateKey}
-                      onDragLeave={isInSelectedMonth ? leaveDrop : undefined}
-                      onDragOver={isInSelectedMonth ? allowDrop : undefined}
+                      onDragLeave={isEditMode && isInSelectedMonth ? leaveDrop : undefined}
+                      onDragOver={isEditMode && isInSelectedMonth ? allowDrop : undefined}
                       onDrop={
-                        isInSelectedMonth
+                        isEditMode && isInSelectedMonth
                           ? (event) => dropActivity(event, dateKey)
                           : undefined
                       }
@@ -997,10 +1047,10 @@ export default function PlannerApp() {
                           : "month-day day-cell outside-month"
                       }
                       key={dateKey}
-                      onDragLeave={isInSelectedMonth ? leaveDrop : undefined}
-                      onDragOver={isInSelectedMonth ? allowDrop : undefined}
+                      onDragLeave={isEditMode && isInSelectedMonth ? leaveDrop : undefined}
+                      onDragOver={isEditMode && isInSelectedMonth ? allowDrop : undefined}
                       onDrop={
-                        isInSelectedMonth
+                        isEditMode && isInSelectedMonth
                           ? (event) => dropActivity(event, dateKey)
                           : undefined
                       }
@@ -1021,7 +1071,7 @@ export default function PlannerApp() {
             </div>
           )}
 
-          {editingActivity ? (
+          {isEditMode && editingActivity ? (
             <section className="editor-panel" aria-label="Edit scheduled activity">
               <div className="panel-heading">
                 <div>
@@ -1128,7 +1178,8 @@ export default function PlannerApp() {
           ) : null}
         </section>
 
-        <aside className="side-panel">
+        {isEditMode ? (
+          <aside className="side-panel">
           <div className="panel-heading">
             <div>
               <p className="panel-kicker">Drag templates</p>
@@ -1251,6 +1302,7 @@ export default function PlannerApp() {
             )}
           </div>
         </aside>
+        ) : null}
       </section>
       {renderPrintSheet()}
     </main>
@@ -1265,6 +1317,7 @@ export type {
   PlannerState,
   ScheduledActivity,
   PrintMode,
+  AppMode,
   ViewMode
 };
 
