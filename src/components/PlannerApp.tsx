@@ -236,25 +236,56 @@ function getWeekdayDateLabel(date: Date) {
 }
 
 function remapDateByWeekPattern(dateKey: string, sourceMonth: string, targetMonth: string) {
-  const sourceWeeks = getMonthWeeks(sourceMonth);
-  const targetWeeks = getMonthWeeks(targetMonth);
   const sourceDate = dateFromKey(dateKey);
-  const sourceWeekIndex = sourceWeeks.findIndex((week) =>
-    week.some((day) => toDateKey(day) === dateKey)
-  );
-  const sourceDayIndex = sourceDate.getDay() === 0 ? 6 : sourceDate.getDay() - 1;
-  const targetWeek = targetWeeks[Math.min(sourceWeekIndex, targetWeeks.length - 1)];
-  const targetDate = targetWeek[sourceDayIndex];
+  const sourceWeekday = sourceDate.getDay();
+  const sourceOrdinal =
+    getMonthWeeks(sourceMonth)
+      .flat()
+      .filter(
+        (date) =>
+          isSameMonth(date, sourceMonth) &&
+          date.getDay() === sourceWeekday &&
+          date <= sourceDate
+      ).length || 1;
+  const targetCandidates = getMonthWeeks(targetMonth)
+    .flat()
+    .filter(
+      (date) => isSameMonth(date, targetMonth) && date.getDay() === sourceWeekday
+    );
+  const targetDate =
+    targetCandidates[Math.min(sourceOrdinal - 1, targetCandidates.length - 1)] ??
+    monthDateFromKey(targetMonth);
 
-  if (isSameMonth(targetDate, targetMonth)) {
-    return toDateKey(targetDate);
-  }
+  return toDateKey(targetDate);
+}
 
-  const candidates = targetWeeks
-    .map((week) => week[sourceDayIndex])
-    .filter((date) => isSameMonth(date, targetMonth));
+function isTimeRangeValid(startTime?: string, endTime?: string) {
+  return !startTime || !endTime || startTime <= endTime;
+}
 
-  return toDateKey(candidates[candidates.length - 1] ?? targetDate);
+function getScheduleDatesForTemplate(
+  template: ActivityTemplate,
+  dateKey: string,
+  selectedMonth: string
+) {
+  if (!template.isRecurring) return [dateKey];
+
+  const selectedDate = dateFromKey(dateKey);
+  return getMonthWeeks(selectedMonth)
+    .flat()
+    .filter((date) => {
+      const targetDateKey = toDateKey(date);
+      return (
+        isSameMonth(date, selectedMonth) &&
+        date.getDay() === selectedDate.getDay() &&
+        targetDateKey >= dateKey
+      );
+    })
+    .map(toDateKey);
+}
+
+function isNavigableMonth(monthKey: string, baseMonth = monthKeyFromDate(new Date())) {
+  return monthKey >= addMonths(baseMonth, -1) && monthKey <= addMonths(baseMonth, 1);
 }
 
 function emptyState(): PlannerState {
@@ -390,15 +421,13 @@ export default function PlannerApp() {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [openIconMenu, setOpenIconMenu] = useState<IconMenu>(null);
   const [pendingRecurringDeleteId, setPendingRecurringDeleteId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const isEditMode = appMode === "edit";
 
+  const currentMonth = useMemo(() => monthKeyFromDate(new Date()), []);
   const monthLabel = useMemo(
     () => getMonthLabel(planner.selectedMonth),
     [planner.selectedMonth]
-  );
-  const visibleMonth = useMemo(
-    () => planner.state.months[planner.selectedMonth]?.scheduled ?? [],
-    [planner.selectedMonth, planner.state.months]
   );
   const monthWeeks = useMemo(
     () => getMonthWeeks(planner.selectedMonth),
@@ -415,8 +444,22 @@ export default function PlannerApp() {
   const selectedWeekIndex = monthWeeks.findIndex(
     (week) => toDateKey(week[0]) === selectedWeekStart
   );
+  const activityTimeRangeIsValid = isTimeRangeValid(
+    activityStartTime || undefined,
+    activityEndTime || undefined
+  );
+  const canAddActivity = activityTitle.trim().length > 0 && activityTimeRangeIsValid;
+  const canGoPreviousMonth = isNavigableMonth(addMonths(planner.selectedMonth, -1), currentMonth);
+  const canGoNextMonth = isNavigableMonth(addMonths(planner.selectedMonth, 1), currentMonth);
   const canGoPreviousWeek = selectedWeekIndex > 0;
   const canGoNextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < monthWeeks.length - 1;
+  const selectedTemplate = useMemo(() => {
+    if (!selectedTemplateId) return null;
+    return (
+      planner.state.activityTemplates.find((activity) => activity.id === selectedTemplateId) ??
+      null
+    );
+  }, [planner.state.activityTemplates, selectedTemplateId]);
   const editingActivity = useMemo(() => {
     if (!editingActivityId) return null;
     return findScheduledActivity(planner.state, editingActivityId);
@@ -509,7 +552,7 @@ export default function PlannerApp() {
   function addActivity(event: { preventDefault: () => void }) {
     event.preventDefault();
     const title = activityTitle.trim();
-    if (!title) return;
+    if (!title || !activityTimeRangeIsValid) return;
 
     setPlanner((current) => ({
       ...current,
@@ -542,6 +585,7 @@ export default function PlannerApp() {
   }
 
   function deleteActivityTemplate(activityId: string) {
+    setSelectedTemplateId((current) => (current === activityId ? null : current));
     setPlanner((current) => ({
       ...current,
       state: {
@@ -602,42 +646,41 @@ export default function PlannerApp() {
   ) {
     event.preventDefault();
     event.currentTarget.classList.remove("drop-ready");
-    if (!isSameMonth(dateFromKey(dateKey), planner.selectedMonth)) return;
 
     const templateId = event.dataTransfer.getData("text/plain");
-    const template = planner.state.activityTemplates.find(
-      (activity) => activity.id === templateId
-    );
-    if (!template) return;
+    scheduleTemplateOnDate(templateId, dateKey);
+  }
 
-    const datesToSchedule = template.isRecurring
-      ? monthWeeks
-          .flat()
-          .filter(
-            (date) =>
-              isSameMonth(date, planner.selectedMonth) &&
-              date.getDay() === dateFromKey(dateKey).getDay()
-          )
-          .map(toDateKey)
-      : [dateKey];
-    const recurrenceId = template.isRecurring ? createId("recurrence") : undefined;
-    const scheduled = datesToSchedule.map((targetDate) => ({
-      id: createId("scheduled"),
-      templateId: template.id,
-      recurrenceId,
-      isRecurring: template.isRecurring || undefined,
-      title: template.title,
-      personIds: template.personIds,
-      date: targetDate,
-      startTime: template.startTime,
-      endTime: template.endTime,
-      notes: template.notes,
-      color: template.color,
-      icon: template.icon
-    }));
+  function scheduleTemplateOnDate(templateId: string, dateKey: string) {
+    if (!isEditMode || !isSameMonth(dateFromKey(dateKey), planner.selectedMonth)) return;
     const targetMonth = monthKeyFromDate(dateFromKey(dateKey));
 
     setPlanner((current) => {
+      const template = current.state.activityTemplates.find(
+        (activity) => activity.id === templateId
+      );
+      if (!template) return current;
+
+      const datesToSchedule = getScheduleDatesForTemplate(
+        template,
+        dateKey,
+        current.selectedMonth
+      );
+      const recurrenceId = template.isRecurring ? createId("recurrence") : undefined;
+      const scheduled = datesToSchedule.map((targetDate) => ({
+        id: createId("scheduled"),
+        templateId: template.id,
+        recurrenceId,
+        isRecurring: template.isRecurring || undefined,
+        title: template.title,
+        personIds: template.personIds,
+        date: targetDate,
+        startTime: template.startTime,
+        endTime: template.endTime,
+        notes: template.notes,
+        color: template.color,
+        icon: template.icon
+      }));
       const month = current.state.months[targetMonth] ?? {
         monthKey: targetMonth,
         scheduled: []
@@ -656,6 +699,7 @@ export default function PlannerApp() {
         state: ensureRollingMonths(nextState, current.selectedMonth)
       };
     });
+    setSelectedTemplateId(null);
   }
 
   function updateScheduledActivity(
@@ -679,6 +723,10 @@ export default function PlannerApp() {
       if (!existing) return current;
 
       const updated = { ...existing, ...patch };
+      if (typeof patch.title === "string") {
+        if (!patch.title.trim()) return current;
+      }
+      if (!isTimeRangeValid(updated.startTime, updated.endTime)) return current;
       const targetMonth = monthKeyFromDate(dateFromKey(updated.date));
       const target = allMonths[targetMonth] ?? {
         monthKey: targetMonth,
@@ -776,6 +824,7 @@ export default function PlannerApp() {
   function changeMonth(amount: number) {
     setPlanner((current) => {
       const selectedMonth = addMonths(current.selectedMonth, amount);
+      if (!isNavigableMonth(selectedMonth)) return current;
       const selectedWeekStart = getFirstWeekStartForMonth(selectedMonth);
       return {
         ...current,
@@ -807,7 +856,8 @@ export default function PlannerApp() {
   }
 
   function activitiesForDate(dateKey: string) {
-    return visibleMonth
+    const monthKey = monthKeyFromDate(dateFromKey(dateKey));
+    return (planner.state.months[monthKey]?.scheduled ?? [])
       .filter((activity) => activity.date === dateKey)
       .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
   }
@@ -924,6 +974,7 @@ export default function PlannerApp() {
         : monthLabel;
     const className = [
       "print-sheet",
+      `print-${mode}-sheet`,
       planner.viewMode === mode ? "active-print-sheet" : ""
     ]
       .filter(Boolean)
@@ -1042,16 +1093,27 @@ export default function PlannerApp() {
 
   function renderActivityTemplate(activity: ActivityTemplate) {
     const timeLabel = activityTimeLabel(activity);
+    const isSelected = selectedTemplateId === activity.id;
 
     return (
       <article
-        className="activity-card"
-        draggable
+        className={isSelected ? "activity-card selected-template" : "activity-card"}
+        draggable={isEditMode}
         key={activity.id}
         onDragStart={(event) => beginActivityDrag(event, activity.id)}
         style={{ borderLeftColor: activity.color }}
       >
-        <div>
+        <button
+          aria-label={`${isSelected ? "Deselect" : "Select"} ${activity.title} for scheduling`}
+          aria-pressed={isSelected}
+          className="activity-card-main"
+          onClick={() =>
+            setSelectedTemplateId((current) =>
+              current === activity.id ? null : activity.id
+            )
+          }
+          type="button"
+        >
           <h3 className="activity-heading">
             {activity.icon ? (
               <span aria-hidden="true" className="emoji-mark">
@@ -1085,7 +1147,7 @@ export default function PlannerApp() {
             {timeLabel ? <span className="muted-label">{timeLabel}</span> : null}
           </div>
           {activity.notes ? <p>{activity.notes}</p> : null}
-        </div>
+        </button>
         <button
           aria-label={`Delete ${activity.title}`}
           className="icon-button"
@@ -1187,6 +1249,7 @@ export default function PlannerApp() {
           <button
             aria-label="Previous month"
             className="secondary-button"
+            disabled={!canGoPreviousMonth}
             onClick={() => changeMonth(-1)}
             type="button"
           >
@@ -1198,6 +1261,7 @@ export default function PlannerApp() {
           <button
             aria-label="Next month"
             className="secondary-button"
+            disabled={!canGoNextMonth}
             onClick={() => changeMonth(1)}
             type="button"
           >
@@ -1400,6 +1464,9 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
+                  const canScheduleSelectedTemplate = Boolean(
+                    isEditMode && isInSelectedMonth && selectedTemplate
+                  );
                   const className = [
                     "day-cell",
                     isWeekend(date) ? "weekend-day" : "",
@@ -1422,6 +1489,21 @@ export default function PlannerApp() {
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
+                        {canScheduleSelectedTemplate ? (
+                          <button
+                            aria-label={`Schedule ${selectedTemplate?.title} on ${dayLabel(
+                              date
+                            )}`}
+                            className="day-schedule-button"
+                            onClick={() =>
+                              selectedTemplateId &&
+                              scheduleTemplateOnDate(selectedTemplateId, dateKey)
+                            }
+                            type="button"
+                          >
+                            <Plus aria-hidden="true" size={14} />
+                          </button>
+                        ) : null}
                       </header>
                       <div className="scheduled-list">
                         {activities.map(renderScheduledActivity)}
@@ -1454,6 +1536,9 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
+                  const canScheduleSelectedTemplate = Boolean(
+                    isEditMode && isInSelectedMonth && selectedTemplate
+                  );
                   const className = [
                     "month-day",
                     "day-cell",
@@ -1477,6 +1562,21 @@ export default function PlannerApp() {
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
+                        {canScheduleSelectedTemplate ? (
+                          <button
+                            aria-label={`Schedule ${selectedTemplate?.title} on ${dayLabel(
+                              date
+                            )}`}
+                            className="day-schedule-button"
+                            onClick={() =>
+                              selectedTemplateId &&
+                              scheduleTemplateOnDate(selectedTemplateId, dateKey)
+                            }
+                            type="button"
+                          >
+                            <Plus aria-hidden="true" size={14} />
+                          </button>
+                        ) : null}
                       </header>
                       <div className="scheduled-list">
                         {activities.map(renderScheduledActivity)}
@@ -1579,6 +1679,7 @@ export default function PlannerApp() {
                     <span>From</span>
                     <input
                       aria-label="Scheduled start time"
+                      max={editingActivity.endTime}
                       type="time"
                       value={editingActivity.startTime ?? ""}
                       onChange={(event) =>
@@ -1592,6 +1693,7 @@ export default function PlannerApp() {
                     <span>To</span>
                     <input
                       aria-label="Scheduled end time"
+                      min={editingActivity.startTime}
                       type="time"
                       value={editingActivity.endTime ?? ""}
                       onChange={(event) =>
@@ -1668,6 +1770,7 @@ export default function PlannerApp() {
                 value={activityTitle}
                 onChange={(event) => setActivityTitle(event.target.value)}
                 placeholder="Gym, football..."
+                required
               />
             </div>
 
@@ -1675,7 +1778,9 @@ export default function PlannerApp() {
               <label className="time-field">
                 <span>From</span>
                 <input
+                  aria-invalid={!activityTimeRangeIsValid}
                   aria-label="Optional start time"
+                  max={activityEndTime || undefined}
                   type="time"
                   value={activityStartTime}
                   onChange={(event) => setActivityStartTime(event.target.value)}
@@ -1684,13 +1789,18 @@ export default function PlannerApp() {
               <label className="time-field">
                 <span>To</span>
                 <input
+                  aria-invalid={!activityTimeRangeIsValid}
                   aria-label="Optional end time"
+                  min={activityStartTime || undefined}
                   type="time"
                   value={activityEndTime}
                   onChange={(event) => setActivityEndTime(event.target.value)}
                 />
               </label>
             </div>
+            {!activityTimeRangeIsValid ? (
+              <p className="form-error">End time must not be before start time.</p>
+            ) : null}
 
             <label className="check-chip full-width-check">
               <input
@@ -1751,7 +1861,7 @@ export default function PlannerApp() {
               rows={3}
             />
 
-            <button className="primary-action" type="submit">
+            <button className="primary-action" disabled={!canAddActivity} type="submit">
               <Plus aria-hidden="true" size={18} />
               Add activity
             </button>
@@ -1791,6 +1901,8 @@ export {
   getMonthWeeks,
   getWeekDays,
   getMonthLabel,
+  getScheduleDatesForTemplate,
+  isNavigableMonth,
   isSameMonth,
   isToday,
   isWeekend,

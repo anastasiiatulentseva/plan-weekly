@@ -476,6 +476,25 @@ h2 {
   box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.18);
 }
 
+.day-schedule-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.day-schedule-button:hover,
+.day-schedule-button:focus-visible {
+  border-color: #60a5fa;
+  background: #dbeafe;
+}
+
 .day-cell.weekend-day {
   background: #f6f9fd;
 }
@@ -734,6 +753,7 @@ div.scheduled-main {
 
 .print-month-grid {
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto repeat(6, minmax(0, 1fr));
 }
 
 .print-weekday {
@@ -753,6 +773,10 @@ div.scheduled-main {
 
 .print-week-grid .print-day {
   min-height: 520px;
+}
+
+.print-month-sheet .print-day {
+  min-height: 0;
 }
 
 .print-outside-month {
@@ -1087,6 +1111,17 @@ fieldset {
   font-weight: 500;
 }
 
+.primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.44;
+}
+
+.form-error {
+  margin: -2px 0 0;
+  color: #b91c1c;
+  font-size: 0.78rem;
+}
+
 .activity-list {
   display: grid;
   gap: 10px;
@@ -1108,6 +1143,26 @@ fieldset {
   border-left: 5px solid;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.activity-card-main {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.activity-card.selected-template {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.activity-card-main:focus-visible {
+  border-radius: 5px;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 
 .activity-card h3 {
@@ -1273,6 +1328,41 @@ fieldset {
   .print-week-grid,
   .print-month-grid {
     gap: 5px;
+  }
+
+  .print-month-sheet .print-header {
+    margin-bottom: 10px;
+  }
+
+  .print-month-sheet .print-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .print-month-sheet .print-day {
+    height: 86px;
+    padding: 5px;
+    overflow: hidden;
+  }
+
+  .print-month-sheet .print-day header {
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+  }
+
+  .print-month-sheet .print-activity-list {
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .print-month-sheet .print-activity {
+    padding: 3px 4px;
+  }
+
+  .print-month-sheet .print-activity strong,
+  .print-month-sheet .print-activity span,
+  .print-month-sheet .print-activity p {
+    font-size: 0.58rem;
+    line-height: 1.2;
   }
 
   .print-day {
