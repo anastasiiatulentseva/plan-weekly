@@ -2,6 +2,8 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
+  Pencil,
   GripVertical,
   Plus,
   Printer,
@@ -229,6 +231,7 @@ export default function PlannerApp() {
   const [activityNotes, setActivityNotes] = useState("");
   const [activityPeople, setActivityPeople] = useState<string[]>([]);
   const [activityColor, setActivityColor] = useState(activityPalette[0]);
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
 
   const monthLabel = useMemo(
     () => getMonthLabel(planner.selectedMonth),
@@ -255,6 +258,12 @@ export default function PlannerApp() {
   );
   const canGoPreviousWeek = selectedWeekIndex > 0;
   const canGoNextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < monthWeeks.length - 1;
+  const editingActivity = useMemo(() => {
+    if (!editingActivityId) return null;
+    return Object.values(planner.state.months)
+      .flatMap((month) => month.scheduled)
+      .find((activity) => activity.id === editingActivityId);
+  }, [editingActivityId, planner.state.months]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
@@ -332,6 +341,168 @@ export default function PlannerApp() {
     }));
   }
 
+  function setMonthScheduled(
+    state: PlannerState,
+    monthKey: string,
+    scheduled: ScheduledActivity[]
+  ) {
+    return {
+      ...state,
+      months: {
+        ...state.months,
+        [monthKey]: {
+          monthKey,
+          scheduled
+        }
+      }
+    };
+  }
+
+  function beginActivityDrag(
+    event: { dataTransfer: DataTransfer },
+    activityId: string
+  ) {
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData("text/plain", activityId);
+  }
+
+  function allowDrop(event: {
+    preventDefault: () => void;
+    currentTarget: HTMLElement;
+  }) {
+    event.preventDefault();
+    event.currentTarget.classList.add("drop-ready");
+  }
+
+  function leaveDrop(event: { currentTarget: HTMLElement }) {
+    event.currentTarget.classList.remove("drop-ready");
+  }
+
+  function dropActivity(
+    event: {
+      preventDefault: () => void;
+      currentTarget: HTMLElement;
+      dataTransfer: DataTransfer;
+    },
+    dateKey: string
+  ) {
+    event.preventDefault();
+    event.currentTarget.classList.remove("drop-ready");
+    const templateId = event.dataTransfer.getData("text/plain");
+    const template = planner.state.activityTemplates.find(
+      (activity) => activity.id === templateId
+    );
+    if (!template) return;
+
+    const scheduled: ScheduledActivity = {
+      id: createId("scheduled"),
+      templateId: template.id,
+      title: template.title,
+      personIds: template.personIds,
+      date: dateKey,
+      startTime: "09:00",
+      endTime: "10:00",
+      notes: template.notes,
+      color: template.color
+    };
+    const targetMonth = monthKeyFromDate(dateFromKey(dateKey));
+
+    setPlanner((current) => {
+      const month = current.state.months[targetMonth] ?? {
+        monthKey: targetMonth,
+        scheduled: []
+      };
+      return {
+        ...current,
+        state: setMonthScheduled(current.state, targetMonth, [
+          ...month.scheduled,
+          scheduled
+        ])
+      };
+    });
+    setEditingActivityId(scheduled.id);
+  }
+
+  function updateScheduledActivity(
+    activityId: string,
+    patch: Partial<ScheduledActivity>
+  ) {
+    setPlanner((current) => {
+      const allMonths = Object.fromEntries(
+        Object.entries(current.state.months).map(([monthKey, month]) => [
+          monthKey,
+          {
+            ...month,
+            scheduled: month.scheduled.filter((activity) => activity.id !== activityId)
+          }
+        ])
+      );
+      const existing = Object.values(current.state.months)
+        .flatMap((month) => month.scheduled)
+        .find((activity) => activity.id === activityId);
+
+      if (!existing) return current;
+
+      const updated = { ...existing, ...patch };
+      const targetMonth = monthKeyFromDate(dateFromKey(updated.date));
+      const target = allMonths[targetMonth] ?? {
+        monthKey: targetMonth,
+        scheduled: []
+      };
+
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          months: {
+            ...allMonths,
+            [targetMonth]: {
+              monthKey: targetMonth,
+              scheduled: [...target.scheduled, updated].sort((a, b) =>
+                `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)
+              )
+            }
+          }
+        }
+      };
+    });
+  }
+
+  function toggleScheduledPerson(activityId: string, personId: string) {
+    const activity = Object.values(planner.state.months)
+      .flatMap((month) => month.scheduled)
+      .find((scheduled) => scheduled.id === activityId);
+    if (!activity) return;
+    updateScheduledActivity(activityId, {
+      personIds: activity.personIds.includes(personId)
+        ? activity.personIds.filter((id) => id !== personId)
+        : [...activity.personIds, personId]
+    });
+  }
+
+  function deleteScheduledActivity(activityId: string) {
+    setPlanner((current) => ({
+      ...current,
+      state: {
+        ...current.state,
+        months: Object.fromEntries(
+          Object.entries(current.state.months).map(([monthKey, month]) => [
+            monthKey,
+            {
+              ...month,
+              scheduled: month.scheduled.filter(
+                (activity) => activity.id !== activityId
+              )
+            }
+          ])
+        )
+      }
+    }));
+    if (editingActivityId === activityId) {
+      setEditingActivityId(null);
+    }
+  }
+
   function personById(personId: string) {
     return planner.state.people.find((person) => person.id === personId);
   }
@@ -370,7 +541,9 @@ export default function PlannerApp() {
   }
 
   function activitiesForDate(dateKey: string) {
-    return visibleMonth.filter((activity) => activity.date === dateKey);
+    return visibleMonth
+      .filter((activity) => activity.date === dateKey)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }
 
   function dayLabel(date: Date) {
@@ -378,6 +551,54 @@ export default function PlannerApp() {
       weekday: "short",
       day: "numeric"
     }).format(date);
+  }
+
+  function renderScheduledActivity(activity: ScheduledActivity) {
+    return (
+      <article
+        className="scheduled-card"
+        key={activity.id}
+        style={{ borderLeftColor: activity.color }}
+      >
+        <button
+          className="scheduled-main"
+          onClick={() => setEditingActivityId(activity.id)}
+          type="button"
+        >
+          <strong>{activity.title}</strong>
+          <span>
+            <Clock3 aria-hidden="true" size={12} />
+            {activity.startTime} - {activity.endTime}
+          </span>
+          <span className="scheduled-people">
+            {activity.personIds.length === 0
+              ? "Everyone"
+              : activity.personIds
+                  .map((personId) => personById(personId)?.name)
+                  .filter(Boolean)
+                  .join(", ")}
+          </span>
+        </button>
+        <div className="scheduled-actions">
+          <button
+            aria-label={`Edit ${activity.title}`}
+            className="icon-button"
+            onClick={() => setEditingActivityId(activity.id)}
+            type="button"
+          >
+            <Pencil aria-hidden="true" size={14} />
+          </button>
+          <button
+            aria-label={`Delete ${activity.title}`}
+            className="icon-button"
+            onClick={() => deleteScheduledActivity(activity.id)}
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={14} />
+          </button>
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -537,15 +758,19 @@ export default function PlannerApp() {
                           : "day-cell outside-month"
                       }
                       key={dateKey}
+                      onDragLeave={leaveDrop}
+                      onDragOver={allowDrop}
+                      onDrop={(event) => dropActivity(event, dateKey)}
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
                       </header>
-                      <div className="day-empty">
-                        {activities.length === 0
-                          ? "Drop activities here"
-                          : `${activities.length} planned`}
+                      <div className="scheduled-list">
+                        {activities.map(renderScheduledActivity)}
                       </div>
+                      {activities.length === 0 ? (
+                        <div className="day-empty">Drop activities here</div>
+                      ) : null}
                     </section>
                   );
                 })}
@@ -576,19 +801,131 @@ export default function PlannerApp() {
                           : "month-day day-cell outside-month"
                       }
                       key={dateKey}
+                      onDragLeave={leaveDrop}
+                      onDragOver={allowDrop}
+                      onDrop={(event) => dropActivity(event, dateKey)}
                     >
                       <header>
                         <span>{date.getDate()}</span>
                       </header>
-                      <div className="day-empty">
-                        {activities.length === 0 ? "Drop" : `${activities.length} planned`}
+                      <div className="scheduled-list">
+                        {activities.map(renderScheduledActivity)}
                       </div>
+                      {activities.length === 0 ? (
+                        <div className="day-empty">Drop</div>
+                      ) : null}
                     </section>
                   );
                 })}
               </div>
             </div>
           )}
+
+          {editingActivity ? (
+            <section className="editor-panel" aria-label="Edit scheduled activity">
+              <div className="panel-heading">
+                <div>
+                  <p className="panel-kicker">Scheduled copy</p>
+                  <h2>Edit activity</h2>
+                </div>
+                <button
+                  className="ghost-button"
+                  onClick={() => setEditingActivityId(null)}
+                  type="button"
+                >
+                  Done
+                </button>
+              </div>
+
+              <div className="editor-grid">
+                <label>
+                  Title
+                  <input
+                    value={editingActivity.title}
+                    onChange={(event) =>
+                      updateScheduledActivity(editingActivity.id, {
+                        title: event.target.value
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Date
+                  <input
+                    type="date"
+                    value={editingActivity.date}
+                    onChange={(event) =>
+                      updateScheduledActivity(editingActivity.id, {
+                        date: event.target.value
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Start
+                  <input
+                    type="time"
+                    value={editingActivity.startTime}
+                    onChange={(event) =>
+                      updateScheduledActivity(editingActivity.id, {
+                        startTime: event.target.value
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  End
+                  <input
+                    type="time"
+                    value={editingActivity.endTime}
+                    onChange={(event) =>
+                      updateScheduledActivity(editingActivity.id, {
+                        endTime: event.target.value
+                      })
+                    }
+                  />
+                </label>
+                <label className="editor-wide">
+                  Notes
+                  <textarea
+                    rows={3}
+                    value={editingActivity.notes ?? ""}
+                    onChange={(event) =>
+                      updateScheduledActivity(editingActivity.id, {
+                        notes: event.target.value || undefined
+                      })
+                    }
+                  />
+                </label>
+                <fieldset className="editor-wide">
+                  <legend>People</legend>
+                  <div className="person-options">
+                    {planner.state.people.length === 0 ? (
+                      <p className="empty-note">No people created yet.</p>
+                    ) : (
+                      planner.state.people.map((person) => (
+                        <label className="check-chip" key={person.id}>
+                          <input
+                            checked={editingActivity.personIds.includes(person.id)}
+                            onChange={() =>
+                              toggleScheduledPerson(editingActivity.id, person.id)
+                            }
+                            type="checkbox"
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="color-dot"
+                            style={{ backgroundColor: person.color }}
+                          />
+                          {person.name}
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </fieldset>
+              </div>
+            </section>
+          ) : null}
         </section>
 
         <aside className="side-panel">
@@ -674,6 +1011,7 @@ export default function PlannerApp() {
                   className="activity-card"
                   draggable
                   key={activity.id}
+                  onDragStart={(event) => beginActivityDrag(event, activity.id)}
                   style={{ borderLeftColor: activity.color }}
                 >
                   <div>
