@@ -85,9 +85,8 @@ textarea:focus {
   margin: 0 0 6px;
   color: #64748b;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 h1,
@@ -100,6 +99,7 @@ h1 {
   margin-bottom: 8px;
   color: #0f172a;
   font-size: clamp(2rem, 5vw, 4.75rem);
+  font-weight: 500;
   line-height: 0.95;
   letter-spacing: 0;
 }
@@ -108,6 +108,7 @@ h2 {
   margin-bottom: 12px;
   color: #111827;
   font-size: 1rem;
+  font-weight: 500;
 }
 
 .hero-copy {
@@ -144,6 +145,7 @@ h2 {
 .month-card strong {
   color: #111827;
   font-size: 1.2rem;
+  font-weight: 500;
 }
 
 .planner-toolbar {
@@ -172,6 +174,7 @@ h2 {
   min-width: 160px;
   color: #111827;
   font-size: 1rem;
+  font-weight: 500;
 }
 
 .secondary-button,
@@ -186,7 +189,7 @@ h2 {
   border-radius: 7px;
   background: #ffffff;
   color: #1f2937;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .secondary-button {
@@ -223,7 +226,7 @@ h2 {
   border-radius: 6px;
   background: transparent;
   color: #64748b;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .mode-control {
@@ -286,7 +289,7 @@ h2 {
   background: transparent;
   color: #1f2937;
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 500;
   text-align: left;
 }
 
@@ -361,9 +364,8 @@ h2 {
   margin-bottom: 2px;
   color: #64748b;
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .calendar-surface {
@@ -414,9 +416,8 @@ h2 {
 .weekday-heading {
   color: #64748b;
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: 500;
   text-align: center;
-  text-transform: uppercase;
 }
 
 .day-cell {
@@ -447,7 +448,7 @@ h2 {
   min-height: 28px;
   color: #111827;
   font-size: 0.88rem;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .outside-month {
@@ -463,7 +464,7 @@ h2 {
   border-radius: 7px;
   color: #94a3b8;
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 400;
   text-align: center;
 }
 
@@ -505,6 +506,7 @@ div.scheduled-main {
   overflow-wrap: anywhere;
   color: #111827;
   font-size: 0.84rem;
+  font-weight: 500;
 }
 
 .scheduled-main span {
@@ -513,7 +515,7 @@ div.scheduled-main {
   gap: 4px;
   color: #64748b;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .scheduled-people {
@@ -550,7 +552,7 @@ div.scheduled-main {
   gap: 6px;
   color: #334155;
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .editor-wide {
@@ -578,13 +580,13 @@ div.scheduled-main {
   margin-bottom: 2px;
   color: #64748b;
   font-size: 0.8rem;
-  font-weight: 900;
-  text-transform: uppercase;
+  font-weight: 500;
 }
 
 .print-header h1 {
   margin: 0;
   font-size: 2rem;
+  font-weight: 500;
   line-height: 1.05;
 }
 
@@ -597,7 +599,7 @@ div.scheduled-main {
 .print-people span {
   gap: 6px;
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .print-week-grid,
@@ -617,9 +619,8 @@ div.scheduled-main {
 .print-weekday {
   color: #475569;
   font-size: 0.74rem;
-  font-weight: 900;
+  font-weight: 500;
   text-align: center;
-  text-transform: uppercase;
 }
 
 .print-day {
@@ -643,7 +644,7 @@ div.scheduled-main {
   margin-bottom: 8px;
   color: #111827;
   font-size: 0.82rem;
-  font-weight: 900;
+  font-weight: 500;
 }
 
 .print-activity-list {
@@ -668,6 +669,7 @@ div.scheduled-main {
 .print-activity strong {
   color: #111827;
   font-size: 0.78rem;
+  font-weight: 500;
 }
 
 .print-activity span,
@@ -691,7 +693,7 @@ div.scheduled-main {
 fieldset legend {
   color: #334155;
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 fieldset {
@@ -751,7 +753,7 @@ fieldset {
   background: #ffffff;
   color: #1f2937;
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .mini-chip,
@@ -805,7 +807,7 @@ fieldset {
   border-radius: 7px;
   background: #111827;
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .activity-list {
@@ -828,6 +830,7 @@ fieldset {
   margin: 0 0 7px;
   color: #111827;
   font-size: 0.98rem;
+  font-weight: 500;
 }
 
 .activity-card p {
