@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Copy,
   Pencil,
   GripVertical,
   Plus,
@@ -149,6 +150,28 @@ function getMonthLabel(monthKey: string) {
     month: "long",
     year: "numeric"
   }).format(monthDateFromKey(monthKey));
+}
+
+function remapDateByWeekPattern(dateKey: string, sourceMonth: string, targetMonth: string) {
+  const sourceWeeks = getMonthWeeks(sourceMonth);
+  const targetWeeks = getMonthWeeks(targetMonth);
+  const sourceDate = dateFromKey(dateKey);
+  const sourceWeekIndex = sourceWeeks.findIndex((week) =>
+    week.some((day) => toDateKey(day) === dateKey)
+  );
+  const sourceDayIndex = sourceDate.getDay() === 0 ? 6 : sourceDate.getDay() - 1;
+  const targetWeek = targetWeeks[Math.min(sourceWeekIndex, targetWeeks.length - 1)];
+  const targetDate = targetWeek[sourceDayIndex];
+
+  if (isSameMonth(targetDate, targetMonth)) {
+    return toDateKey(targetDate);
+  }
+
+  const candidates = targetWeeks
+    .map((week) => week[sourceDayIndex])
+    .filter((date) => isSameMonth(date, targetMonth));
+
+  return toDateKey(candidates[candidates.length - 1] ?? targetDate);
 }
 
 function emptyState(): PlannerState {
@@ -388,6 +411,8 @@ export default function PlannerApp() {
   ) {
     event.preventDefault();
     event.currentTarget.classList.remove("drop-ready");
+    if (!isSameMonth(dateFromKey(dateKey), planner.selectedMonth)) return;
+
     const templateId = event.dataTransfer.getData("text/plain");
     const template = planner.state.activityTemplates.find(
       (activity) => activity.id === templateId
@@ -412,12 +437,14 @@ export default function PlannerApp() {
         monthKey: targetMonth,
         scheduled: []
       };
+      const nextState = setMonthScheduled(current.state, targetMonth, [
+        ...month.scheduled,
+        scheduled
+      ]);
+
       return {
         ...current,
-        state: setMonthScheduled(current.state, targetMonth, [
-          ...month.scheduled,
-          scheduled
-        ])
+        state: ensureRollingMonths(nextState, current.selectedMonth)
       };
     });
     setEditingActivityId(scheduled.id);
@@ -452,7 +479,7 @@ export default function PlannerApp() {
 
       return {
         ...current,
-        state: {
+        state: ensureRollingMonths({
           ...current.state,
           months: {
             ...allMonths,
@@ -463,7 +490,7 @@ export default function PlannerApp() {
               )
             }
           }
-        }
+        }, current.selectedMonth)
       };
     });
   }
@@ -544,6 +571,35 @@ export default function PlannerApp() {
     return visibleMonth
       .filter((activity) => activity.date === dateKey)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }
+
+  function cloneToNextMonth() {
+    setPlanner((current) => {
+      const sourceMonth = current.selectedMonth;
+      const targetMonth = addMonths(sourceMonth, 1);
+      const sourceActivities =
+        current.state.months[sourceMonth]?.scheduled.filter((activity) =>
+          isSameMonth(dateFromKey(activity.date), sourceMonth)
+        ) ?? [];
+      const targetPlan = current.state.months[targetMonth] ?? {
+        monthKey: targetMonth,
+        scheduled: []
+      };
+      const cloned = sourceActivities.map((activity) => ({
+        ...activity,
+        id: createId("scheduled"),
+        date: remapDateByWeekPattern(activity.date, sourceMonth, targetMonth)
+      }));
+      const nextState = setMonthScheduled(current.state, targetMonth, [
+        ...targetPlan.scheduled,
+        ...cloned
+      ]);
+
+      return {
+        ...current,
+        state: ensureRollingMonths(nextState, sourceMonth)
+      };
+    });
   }
 
   function dayLabel(date: Date) {
@@ -661,6 +717,10 @@ export default function PlannerApp() {
         </div>
 
         <div className="print-actions">
+          <button className="ghost-button" onClick={cloneToNextMonth} type="button">
+            <Copy aria-hidden="true" size={17} />
+            Clone next month
+          </button>
           <button className="ghost-button" type="button">
             <Printer aria-hidden="true" size={17} />
             Print week
@@ -750,17 +810,20 @@ export default function PlannerApp() {
                 {selectedWeekDays.map((date) => {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
+                  const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
                   return (
                     <section
                       className={
-                        isSameMonth(date, planner.selectedMonth)
-                          ? "day-cell"
-                          : "day-cell outside-month"
+                        isInSelectedMonth ? "day-cell" : "day-cell outside-month"
                       }
                       key={dateKey}
-                      onDragLeave={leaveDrop}
-                      onDragOver={allowDrop}
-                      onDrop={(event) => dropActivity(event, dateKey)}
+                      onDragLeave={isInSelectedMonth ? leaveDrop : undefined}
+                      onDragOver={isInSelectedMonth ? allowDrop : undefined}
+                      onDrop={
+                        isInSelectedMonth
+                          ? (event) => dropActivity(event, dateKey)
+                          : undefined
+                      }
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
@@ -793,17 +856,22 @@ export default function PlannerApp() {
                 {monthWeeks.flat().map((date) => {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
+                  const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
                   return (
                     <section
                       className={
-                        isSameMonth(date, planner.selectedMonth)
+                        isInSelectedMonth
                           ? "month-day day-cell"
                           : "month-day day-cell outside-month"
                       }
                       key={dateKey}
-                      onDragLeave={leaveDrop}
-                      onDragOver={allowDrop}
-                      onDrop={(event) => dropActivity(event, dateKey)}
+                      onDragLeave={isInSelectedMonth ? leaveDrop : undefined}
+                      onDragOver={isInSelectedMonth ? allowDrop : undefined}
+                      onDrop={
+                        isInSelectedMonth
+                          ? (event) => dropActivity(event, dateKey)
+                          : undefined
+                      }
                     >
                       <header>
                         <span>{date.getDate()}</span>
@@ -1082,6 +1150,7 @@ export {
   monthDateFromKey,
   monthKeyFromDate,
   peoplePalette,
+  remapDateByWeekPattern,
   startOfMondayWeek,
   toDateKey
 };
