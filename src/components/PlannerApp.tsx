@@ -9,6 +9,7 @@ import {
   GripVertical,
   Plus,
   Printer,
+  Settings,
   Trash2,
   Wrench,
   UserRoundPlus
@@ -20,6 +21,7 @@ const STORAGE_KEY = "plan-by-week:v1";
 type ViewMode = "week" | "month";
 type PrintMode = "week" | "month";
 type AppMode = "view" | "edit";
+type OpenMenu = "print" | "settings" | null;
 
 type Person = {
   id: string;
@@ -65,8 +67,8 @@ type PersistedPlanner = {
   viewMode: ViewMode;
 };
 
-const peoplePalette = ["#4f8f78", "#cc6b5a", "#6d78bd", "#b7784f", "#7f6e9f"];
-const activityPalette = ["#e9b44c", "#58a4b0", "#9d6b53", "#6c9a8b", "#b56d7a"];
+const peoplePalette = ["#2563eb", "#059669", "#7c3aed", "#e11d48", "#0891b2"];
+const activityPalette = ["#0ea5e9", "#10b981", "#8b5cf6", "#ec4899", "#84cc16"];
 
 function createId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -261,6 +263,7 @@ export default function PlannerApp() {
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
   const [appMode, setAppMode] = useState<AppMode>("view");
+  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const isEditMode = appMode === "edit";
 
   const monthLabel = useMemo(
@@ -627,7 +630,8 @@ export default function PlannerApp() {
   function dayLabel(date: Date) {
     return new Intl.DateTimeFormat("en-IE", {
       weekday: "short",
-      day: "numeric"
+      day: "numeric",
+      month: "short"
     }).format(date);
   }
 
@@ -800,6 +804,19 @@ export default function PlannerApp() {
     );
   }
 
+  function chooseAppMode(mode: AppMode) {
+    setAppMode(mode);
+    setOpenMenu(null);
+    if (mode === "view") {
+      setEditingActivityId(null);
+    }
+  }
+
+  function choosePrintMode(mode: PrintMode) {
+    setPrintMode(mode);
+    setOpenMenu(null);
+  }
+
   return (
     <main className={`planner-shell ${isEditMode ? "edit-mode" : "view-mode"}`}>
       {isEditMode ? (
@@ -844,28 +861,6 @@ export default function PlannerApp() {
           </button>
         </div>
 
-        <div className="segmented-control mode-control" aria-label="App mode">
-          <button
-            aria-pressed={appMode === "view"}
-            onClick={() => {
-              setAppMode("view");
-              setEditingActivityId(null);
-            }}
-            type="button"
-          >
-            <Eye aria-hidden="true" size={16} />
-            View
-          </button>
-          <button
-            aria-pressed={appMode === "edit"}
-            onClick={() => setAppMode("edit")}
-            type="button"
-          >
-            <Wrench aria-hidden="true" size={16} />
-            Edit
-          </button>
-        </div>
-
         <div className="segmented-control" aria-label="Calendar view">
           <button
             aria-pressed={planner.viewMode === "week"}
@@ -883,29 +878,83 @@ export default function PlannerApp() {
           </button>
         </div>
 
-        <div className="print-actions">
-          {isEditMode ? (
-            <button className="ghost-button" onClick={cloneToNextMonth} type="button">
-              <Copy aria-hidden="true" size={17} />
-              Clone next month
+        <div className="toolbar-actions">
+          <div className="menu-cluster">
+            <button
+              aria-expanded={openMenu === "print"}
+              aria-haspopup="menu"
+              aria-label="Print options"
+              className="icon-menu-button"
+              onClick={() =>
+                setOpenMenu((current) => (current === "print" ? null : "print"))
+              }
+              type="button"
+            >
+              <Printer aria-hidden="true" size={18} />
             </button>
-          ) : null}
-          <button
-            className="ghost-button"
-            onClick={() => setPrintMode("week")}
-            type="button"
-          >
-            <Printer aria-hidden="true" size={17} />
-            Print week
-          </button>
-          <button
-            className="ghost-button"
-            onClick={() => setPrintMode("month")}
-            type="button"
-          >
-            <Printer aria-hidden="true" size={17} />
-            Print month
-          </button>
+            {openMenu === "print" ? (
+              <div className="toolbar-menu" role="menu">
+                <button onClick={() => choosePrintMode("week")} role="menuitem" type="button">
+                  Print week
+                </button>
+                <button onClick={() => choosePrintMode("month")} role="menuitem" type="button">
+                  Print month
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="menu-cluster">
+            <button
+              aria-expanded={openMenu === "settings"}
+              aria-haspopup="menu"
+              aria-label="Planner options"
+              className="icon-menu-button"
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "settings" ? null : "settings"
+                )
+              }
+              type="button"
+            >
+              <Settings aria-hidden="true" size={18} />
+            </button>
+            {openMenu === "settings" ? (
+              <div className="toolbar-menu align-right" role="menu">
+                <button
+                  aria-pressed={appMode === "view"}
+                  onClick={() => chooseAppMode("view")}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Eye aria-hidden="true" size={15} />
+                  View mode
+                </button>
+                <button
+                  aria-pressed={appMode === "edit"}
+                  onClick={() => chooseAppMode("edit")}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Wrench aria-hidden="true" size={15} />
+                  Edit mode
+                </button>
+                {isEditMode ? (
+                  <button
+                    onClick={() => {
+                      cloneToNextMonth();
+                      setOpenMenu(null);
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <Copy aria-hidden="true" size={15} />
+                    Clone next month
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -1014,7 +1063,9 @@ export default function PlannerApp() {
                         {activities.map(renderScheduledActivity)}
                       </div>
                       {activities.length === 0 ? (
-                        <div className="day-empty">Drop activities here</div>
+                        <div className="day-empty">
+                          {isEditMode ? "Drop activities here" : "No activities"}
+                        </div>
                       ) : null}
                     </section>
                   );
@@ -1056,13 +1107,15 @@ export default function PlannerApp() {
                       }
                     >
                       <header>
-                        <span>{date.getDate()}</span>
+                        <span>{dayLabel(date)}</span>
                       </header>
                       <div className="scheduled-list">
                         {activities.map(renderScheduledActivity)}
                       </div>
                       {activities.length === 0 ? (
-                        <div className="day-empty">Drop</div>
+                        <div className="day-empty">
+                          {isEditMode ? "Drop" : "No activities"}
+                        </div>
                       ) : null}
                     </section>
                   );
