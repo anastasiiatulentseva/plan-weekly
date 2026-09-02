@@ -443,6 +443,130 @@ h2 {
   grid-column: span 4;
 }
 
+.print-sheet {
+  display: none;
+}
+
+.print-header,
+.print-people,
+.print-people span {
+  align-items: center;
+  display: flex;
+}
+
+.print-header {
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.print-header p {
+  margin-bottom: 2px;
+  color: #66736f;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.print-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.print-people {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.print-people span {
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.print-week-grid,
+.print-month-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.print-week-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.print-month-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.print-weekday {
+  color: #52615c;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.print-day {
+  min-height: 150px;
+  padding: 8px;
+  border: 1px solid #cfc8bb;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.print-week-grid .print-day {
+  min-height: 520px;
+}
+
+.print-outside-month {
+  background: #f6f4ef;
+  color: #7f8a85;
+}
+
+.print-day header {
+  margin-bottom: 8px;
+  color: #22312d;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.print-activity-list {
+  display: grid;
+  gap: 6px;
+}
+
+.print-activity {
+  padding: 6px;
+  border: 1px solid #ddd7ca;
+  border-left: 4px solid;
+  border-radius: 5px;
+  break-inside: avoid;
+}
+
+.print-activity strong,
+.print-activity span,
+.print-activity p {
+  display: block;
+}
+
+.print-activity strong {
+  color: #1d2926;
+  font-size: 0.78rem;
+}
+
+.print-activity span,
+.print-activity p,
+.print-empty {
+  color: #57645f;
+  font-size: 0.68rem;
+}
+
+.print-activity p {
+  margin: 4px 0 0;
+}
+
 .stacked-form {
   display: grid;
   gap: 8px;
@@ -684,6 +808,11 @@ fieldset {
 }
 
 @media print {
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
   :root,
   body {
     background: #ffffff;
@@ -693,5 +822,25 @@ fieldset {
   .planner-shell {
     width: 100%;
     padding: 0;
+  }
+
+  .planner-hero,
+  .planner-toolbar,
+  .planner-workspace {
+    display: none;
+  }
+
+  .print-sheet {
+    display: block;
+  }
+
+  .print-week-grid,
+  .print-month-grid {
+    gap: 5px;
+  }
+
+  .print-day {
+    border-color: #bdb6ab;
+    box-shadow: none;
   }
 }

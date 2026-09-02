@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 const STORAGE_KEY = "plan-by-week:v1";
 
 type ViewMode = "week" | "month";
+type PrintMode = "week" | "month";
 
 type Person = {
   id: string;
@@ -255,6 +256,7 @@ export default function PlannerApp() {
   const [activityPeople, setActivityPeople] = useState<string[]>([]);
   const [activityColor, setActivityColor] = useState(activityPalette[0]);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [printMode, setPrintMode] = useState<PrintMode | null>(null);
 
   const monthLabel = useMemo(
     () => getMonthLabel(planner.selectedMonth),
@@ -291,6 +293,19 @@ export default function PlannerApp() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
   }, [planner]);
+
+  useEffect(() => {
+    if (!printMode) return;
+
+    const clearPrintMode = () => setPrintMode(null);
+    window.addEventListener("afterprint", clearPrintMode);
+    const printTimer = window.setTimeout(() => window.print(), 50);
+
+    return () => {
+      window.clearTimeout(printTimer);
+      window.removeEventListener("afterprint", clearPrintMode);
+    };
+  }, [printMode]);
 
   function addPerson(event: { preventDefault: () => void }) {
     event.preventDefault();
@@ -609,6 +624,115 @@ export default function PlannerApp() {
     }).format(date);
   }
 
+  function compactDayLabel(date: Date) {
+    return new Intl.DateTimeFormat("en-IE", {
+      weekday: "short",
+      day: "numeric",
+      month: "short"
+    }).format(date);
+  }
+
+  function renderPrintActivity(activity: ScheduledActivity) {
+    return (
+      <article
+        className="print-activity"
+        key={activity.id}
+        style={{ borderLeftColor: activity.color }}
+      >
+        <strong>{activity.title}</strong>
+        <span>
+          {activity.startTime} - {activity.endTime}
+        </span>
+        <span>
+          {activity.personIds.length === 0
+            ? "Everyone"
+            : activity.personIds
+                .map((personId) => personById(personId)?.name)
+                .filter(Boolean)
+                .join(", ")}
+        </span>
+        {activity.notes ? <p>{activity.notes}</p> : null}
+      </article>
+    );
+  }
+
+  function renderPrintDay(date: Date, compact = false) {
+    const dateKey = toDateKey(date);
+    const activities = activitiesForDate(dateKey);
+
+    return (
+      <section
+        className={
+          isSameMonth(date, planner.selectedMonth)
+            ? "print-day"
+            : "print-day print-outside-month"
+        }
+        key={dateKey}
+      >
+        <header>{compact ? date.getDate() : compactDayLabel(date)}</header>
+        <div className="print-activity-list">
+          {activities.length === 0 ? (
+            <span className="print-empty">No activities</span>
+          ) : (
+            activities.map(renderPrintActivity)
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderPrintSheet() {
+    if (!printMode) return null;
+    const title =
+      printMode === "week"
+        ? `${compactDayLabel(selectedWeekDays[0])} - ${compactDayLabel(
+            selectedWeekDays[6]
+          )}`
+        : monthLabel;
+
+    return (
+      <section className="print-sheet" aria-label={`${printMode} print layout`}>
+        <header className="print-header">
+          <div>
+            <p>Plan by Week</p>
+            <h1>{title}</h1>
+          </div>
+          <div className="print-people">
+            {planner.state.people.length === 0 ? (
+              <span>All people</span>
+            ) : (
+              planner.state.people.map((person) => (
+                <span key={person.id}>
+                  <span
+                    aria-hidden="true"
+                    className="color-dot"
+                    style={{ backgroundColor: person.color }}
+                  />
+                  {person.name}
+                </span>
+              ))
+            )}
+          </div>
+        </header>
+
+        {printMode === "week" ? (
+          <div className="print-week-grid">
+            {selectedWeekDays.map((date) => renderPrintDay(date))}
+          </div>
+        ) : (
+          <div className="print-month-grid">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+              <span className="print-weekday" key={label}>
+                {label}
+              </span>
+            ))}
+            {monthWeeks.flat().map((date) => renderPrintDay(date, true))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   function renderScheduledActivity(activity: ScheduledActivity) {
     return (
       <article
@@ -721,11 +845,19 @@ export default function PlannerApp() {
             <Copy aria-hidden="true" size={17} />
             Clone next month
           </button>
-          <button className="ghost-button" type="button">
+          <button
+            className="ghost-button"
+            onClick={() => setPrintMode("week")}
+            type="button"
+          >
             <Printer aria-hidden="true" size={17} />
             Print week
           </button>
-          <button className="ghost-button" type="button">
+          <button
+            className="ghost-button"
+            onClick={() => setPrintMode("month")}
+            type="button"
+          >
             <Printer aria-hidden="true" size={17} />
             Print month
           </button>
@@ -1120,6 +1252,7 @@ export default function PlannerApp() {
           </div>
         </aside>
       </section>
+      {renderPrintSheet()}
     </main>
   );
 }
@@ -1131,6 +1264,7 @@ export type {
   Person,
   PlannerState,
   ScheduledActivity,
+  PrintMode,
   ViewMode
 };
 
