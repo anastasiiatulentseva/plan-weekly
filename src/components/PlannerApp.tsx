@@ -158,6 +158,13 @@ function getMonthLabel(monthKey: string) {
   }).format(monthDateFromKey(monthKey));
 }
 
+function getWeekdayDateLabel(date: Date) {
+  const weekday = new Intl.DateTimeFormat("en-IE", { weekday: "short" }).format(date);
+  const day = new Intl.DateTimeFormat("en-IE", { day: "numeric" }).format(date);
+  const month = new Intl.DateTimeFormat("en-IE", { month: "short" }).format(date);
+  return `${weekday}, ${day} ${month}`;
+}
+
 function remapDateByWeekPattern(dateKey: string, sourceMonth: string, targetMonth: string) {
   const sourceWeeks = getMonthWeeks(sourceMonth);
   const targetWeeks = getMonthWeeks(targetMonth);
@@ -628,11 +635,7 @@ export default function PlannerApp() {
   }
 
   function dayLabel(date: Date) {
-    return new Intl.DateTimeFormat("en-IE", {
-      weekday: "short",
-      day: "numeric",
-      month: "short"
-    }).format(date);
+    return getWeekdayDateLabel(date);
   }
 
   function compactDayLabel(date: Date) {
@@ -1011,10 +1014,10 @@ export default function PlannerApp() {
             <div className="calendar-view">
               <div className="calendar-view-header">
                 <div>
-                  <p className="panel-kicker">Week {selectedWeekIndex + 1}</p>
-                  <h2>
-                    {dayLabel(selectedWeekDays[0])} - {dayLabel(selectedWeekDays[6])}
-                  </h2>
+                  <p className="panel-kicker week-heading">
+                    Week {selectedWeekIndex + 1}, {dayLabel(selectedWeekDays[0])} -{" "}
+                    {dayLabel(selectedWeekDays[6])}
+                  </p>
                 </div>
                 <div className="week-nav">
                   <button

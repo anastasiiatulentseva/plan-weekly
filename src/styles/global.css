@@ -388,6 +388,14 @@ h2 {
   font-size: 1.35rem;
 }
 
+.week-heading {
+  max-width: min(720px, 68vw);
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .week-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(96px, 1fr));
