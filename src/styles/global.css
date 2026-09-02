@@ -169,12 +169,27 @@ h2 {
   gap: 8px;
 }
 
+.month-nav {
+  display: grid;
+  grid-template-columns: 38px minmax(170px, auto) 38px;
+  align-items: center;
+  gap: 10px;
+}
+
+.month-nav-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  text-align: center;
+}
+
 .month-nav strong {
   display: block;
-  min-width: 160px;
   color: #111827;
   font-size: 1rem;
   font-weight: 500;
+  line-height: 1;
 }
 
 .secondary-button,
@@ -577,6 +592,56 @@ div.scheduled-main {
 .scheduled-actions .icon-button {
   min-width: 28px;
   min-height: 28px;
+}
+
+.delete-confirm-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.delete-confirm-panel h2 {
+  margin: 0 0 4px;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.delete-confirm-panel p:not(.panel-kicker) {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #fca5a5;
+  border-radius: 7px;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.danger-button:hover {
+  border-color: #f87171;
+  background: #fee2e2;
 }
 
 .editor-panel {
@@ -1150,6 +1215,19 @@ fieldset {
     grid-template-columns: 1fr;
   }
 
+  .delete-confirm-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .delete-confirm-actions {
+    justify-content: stretch;
+  }
+
+  .delete-confirm-actions button {
+    flex: 1;
+  }
+
   .editor-wide {
     grid-column: auto;
   }
@@ -1166,13 +1244,15 @@ fieldset {
 @media print {
   @page {
     margin: 10mm;
-    size: auto;
+    size: landscape;
   }
 
   :root,
   body {
     background: #ffffff;
     color: #111111;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .planner-shell {
@@ -1186,7 +1266,7 @@ fieldset {
     display: none;
   }
 
-  .print-sheet {
+  .print-sheet.active-print-sheet {
     display: block;
   }
 
@@ -1198,5 +1278,14 @@ fieldset {
   .print-day {
     border-color: #d1d5db;
     box-shadow: none;
+  }
+
+  .print-day.weekend-day {
+    border-color: #bfdbfe;
+    background: #f1f6fd;
+  }
+
+  .print-day.weekend-day header {
+    color: #1d4ed8;
   }
 }

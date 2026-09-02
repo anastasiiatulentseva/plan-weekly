@@ -19,8 +19,9 @@ const STORAGE_KEY = "plan-by-week:v1";
 type ViewMode = "week" | "month";
 type PrintMode = "week" | "month";
 type AppMode = "view" | "edit";
-type OpenMenu = "print" | "settings" | null;
+type OpenMenu = "settings" | null;
 type IconMenu = "person" | "activity" | "editor" | null;
+type DeleteScope = "single" | "future";
 
 type Person = {
   id: string;
@@ -43,6 +44,8 @@ type ActivityTemplate = {
 type ScheduledActivity = {
   id: string;
   templateId?: string;
+  recurrenceId?: string;
+  isRecurring?: boolean;
   title: string;
   personIds: string[];
   date: string;
@@ -285,6 +288,49 @@ function ensureRollingMonths(state: PlannerState, selectedMonth: string) {
   return { ...state, months };
 }
 
+function findScheduledActivity(state: PlannerState, activityId: string) {
+  return Object.values(state.months)
+    .flatMap((month) => month.scheduled)
+    .find((activity) => activity.id === activityId);
+}
+
+function isRecurringScheduledActivity(
+  activity: ScheduledActivity,
+  state: PlannerState
+) {
+  if (activity.isRecurring || activity.recurrenceId) return true;
+  const template = state.activityTemplates.find(
+    (candidate) => candidate.id === activity.templateId
+  );
+  return Boolean(template?.isRecurring);
+}
+
+function isFutureRecurringMatch(
+  candidate: ScheduledActivity,
+  target: ScheduledActivity,
+  state: PlannerState
+) {
+  if (candidate.id === target.id) return true;
+  if (candidate.date < target.date) return false;
+
+  if (target.recurrenceId) {
+    return candidate.recurrenceId === target.recurrenceId;
+  }
+
+  if (!target.templateId || candidate.templateId !== target.templateId) {
+    return false;
+  }
+
+  const template = state.activityTemplates.find(
+    (activity) => activity.id === target.templateId
+  );
+  const isRecurring = candidate.isRecurring || candidate.recurrenceId || template?.isRecurring;
+  return (
+    Boolean(isRecurring) &&
+    dateFromKey(candidate.date).getDay() === dateFromKey(target.date).getDay()
+  );
+}
+
 function loadPlanner(): PersistedPlanner {
   const selectedMonth = monthKeyFromDate(new Date());
   const selectedWeekStart = toDateKey(startOfMondayWeek(new Date()));
@@ -340,10 +386,10 @@ export default function PlannerApp() {
   const [activityEndTime, setActivityEndTime] = useState("");
   const [activityIsRecurring, setActivityIsRecurring] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
-  const [printMode, setPrintMode] = useState<PrintMode | null>(null);
   const [appMode, setAppMode] = useState<AppMode>("view");
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [openIconMenu, setOpenIconMenu] = useState<IconMenu>(null);
+  const [pendingRecurringDeleteId, setPendingRecurringDeleteId] = useState<string | null>(null);
   const isEditMode = appMode === "edit";
 
   const monthLabel = useMemo(
@@ -373,10 +419,12 @@ export default function PlannerApp() {
   const canGoNextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < monthWeeks.length - 1;
   const editingActivity = useMemo(() => {
     if (!editingActivityId) return null;
-    return Object.values(planner.state.months)
-      .flatMap((month) => month.scheduled)
-      .find((activity) => activity.id === editingActivityId);
+    return findScheduledActivity(planner.state, editingActivityId);
   }, [editingActivityId, planner.state.months]);
+  const pendingRecurringDeleteActivity = useMemo(() => {
+    if (!pendingRecurringDeleteId) return null;
+    return findScheduledActivity(planner.state, pendingRecurringDeleteId);
+  }, [pendingRecurringDeleteId, planner.state.months]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
@@ -395,19 +443,6 @@ export default function PlannerApp() {
     document.addEventListener("pointerdown", closeIconMenu);
     return () => document.removeEventListener("pointerdown", closeIconMenu);
   }, [openIconMenu]);
-
-  useEffect(() => {
-    if (!printMode) return;
-
-    const clearPrintMode = () => setPrintMode(null);
-    window.addEventListener("afterprint", clearPrintMode);
-    const printTimer = window.setTimeout(() => window.print(), 50);
-
-    return () => {
-      window.clearTimeout(printTimer);
-      window.removeEventListener("afterprint", clearPrintMode);
-    };
-  }, [printMode]);
 
   function addPerson(event: { preventDefault: () => void }) {
     event.preventDefault();
@@ -585,9 +620,12 @@ export default function PlannerApp() {
           )
           .map(toDateKey)
       : [dateKey];
+    const recurrenceId = template.isRecurring ? createId("recurrence") : undefined;
     const scheduled = datesToSchedule.map((targetDate) => ({
       id: createId("scheduled"),
       templateId: template.id,
+      recurrenceId,
+      isRecurring: template.isRecurring || undefined,
       title: template.title,
       personIds: template.personIds,
       date: targetDate,
@@ -679,27 +717,50 @@ export default function PlannerApp() {
     });
   }
 
-  function deleteScheduledActivity(activityId: string) {
-    setPlanner((current) => ({
-      ...current,
-      state: {
-        ...current.state,
-        months: Object.fromEntries(
-          Object.entries(current.state.months).map(([monthKey, month]) => [
-            monthKey,
-            {
-              ...month,
-              scheduled: month.scheduled.filter(
-                (activity) => activity.id !== activityId
-              )
-            }
-          ])
-        )
-      }
-    }));
+  function requestScheduledActivityDelete(activityId: string) {
+    const activity = findScheduledActivity(planner.state, activityId);
+    if (!activity) return;
+
+    if (isRecurringScheduledActivity(activity, planner.state)) {
+      setPendingRecurringDeleteId(activityId);
+      return;
+    }
+
+    deleteScheduledActivity(activityId);
+  }
+
+  function deleteScheduledActivity(
+    activityId: string,
+    deleteScope: DeleteScope = "single"
+  ) {
+    setPlanner((current) => {
+      const target = findScheduledActivity(current.state, activityId);
+      if (!target) return current;
+
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          months: Object.fromEntries(
+            Object.entries(current.state.months).map(([monthKey, month]) => [
+              monthKey,
+              {
+                ...month,
+                scheduled: month.scheduled.filter((activity) =>
+                  deleteScope === "future"
+                    ? !isFutureRecurringMatch(activity, target, current.state)
+                    : activity.id !== activityId
+                )
+              }
+            ])
+          )
+        }
+      };
+    });
     if (editingActivityId === activityId) {
       setEditingActivityId(null);
     }
+    setPendingRecurringDeleteId(null);
   }
 
   function personById(personId: string) {
@@ -839,7 +900,6 @@ export default function PlannerApp() {
     const className = [
       "print-day",
       isWeekend(date) ? "weekend-day" : "",
-      isToday(date) ? "current-day" : "",
       isSameMonth(date, planner.selectedMonth) ? "" : "print-outside-month"
     ]
       .filter(Boolean)
@@ -849,37 +909,36 @@ export default function PlannerApp() {
       <section className={className} key={dateKey}>
         <header>{compact ? date.getDate() : compactDayLabel(date)}</header>
         <div className="print-activity-list">
-          {activities.length === 0 ? (
-            <span className="print-empty">No activities</span>
-          ) : (
-            activities.map(renderPrintActivity)
-          )}
+          {activities.map(renderPrintActivity)}
         </div>
       </section>
     );
   }
 
-  function renderPrintSheet() {
-    if (!printMode) return null;
+  function renderPrintSheet(mode: PrintMode) {
     const title =
-      printMode === "week"
+      mode === "week"
         ? `${compactDayLabel(selectedWeekDays[0])} - ${compactDayLabel(
             selectedWeekDays[6]
           )}`
         : monthLabel;
+    const className = [
+      "print-sheet",
+      planner.viewMode === mode ? "active-print-sheet" : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
-      <section className="print-sheet" aria-label={`${printMode} print layout`}>
+      <section className={className} aria-label={`${mode} print layout`}>
         <header className="print-header">
           <div>
             <p>Plan by Week</p>
             <h1>{title}</h1>
           </div>
-          <div className="print-people">
-            {planner.state.people.length === 0 ? (
-              <span>All people</span>
-            ) : (
-              planner.state.people.map((person) => (
+          {planner.state.people.length > 0 ? (
+            <div className="print-people">
+              {planner.state.people.map((person) => (
                 <span key={person.id}>
                   {person.icon ? (
                     <span aria-hidden="true" className="emoji-mark">
@@ -888,12 +947,12 @@ export default function PlannerApp() {
                   ) : null}
                   {person.name}
                 </span>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          ) : null}
         </header>
 
-        {printMode === "week" ? (
+        {mode === "week" ? (
           <div className="print-week-grid">
             {selectedWeekDays.map((date) => renderPrintDay(date))}
           </div>
@@ -970,7 +1029,7 @@ export default function PlannerApp() {
             <button
               aria-label={`Delete ${activity.title}`}
               className="icon-button"
-              onClick={() => deleteScheduledActivity(activity.id)}
+              onClick={() => requestScheduledActivityDelete(activity.id)}
               type="button"
             >
               <Trash2 aria-hidden="true" size={14} />
@@ -1098,9 +1157,9 @@ export default function PlannerApp() {
     }
   }
 
-  function choosePrintMode(mode: PrintMode) {
-    setPrintMode(mode);
+  function printCurrentView() {
     setOpenMenu(null);
+    window.print();
   }
 
   return (
@@ -1133,8 +1192,7 @@ export default function PlannerApp() {
           >
             <ChevronLeft aria-hidden="true" size={18} />
           </button>
-          <div>
-            <p className="panel-kicker">Selected month</p>
+          <div className="month-nav-label">
             <strong>{monthLabel}</strong>
           </div>
           <button
@@ -1165,30 +1223,18 @@ export default function PlannerApp() {
         </div>
 
         <div className="toolbar-actions">
-          <div className="menu-cluster">
-            <button
-              aria-expanded={openMenu === "print"}
-              aria-haspopup="menu"
-              aria-label="Print options"
-              className="icon-menu-button"
-              onClick={() =>
-                setOpenMenu((current) => (current === "print" ? null : "print"))
-              }
-              type="button"
-            >
-              <Printer aria-hidden="true" size={18} />
-            </button>
-            {openMenu === "print" ? (
-              <div className="toolbar-menu" role="menu">
-                <button onClick={() => choosePrintMode("week")} role="menuitem" type="button">
-                  Print week
-                </button>
-                <button onClick={() => choosePrintMode("month")} role="menuitem" type="button">
-                  Print month
-                </button>
-              </div>
-            ) : null}
-          </div>
+          {!isEditMode ? (
+            <div className="menu-cluster">
+              <button
+                aria-label={`Print selected ${planner.viewMode}`}
+                className="icon-menu-button"
+                onClick={printCurrentView}
+                type="button"
+              >
+                <Printer aria-hidden="true" size={18} />
+              </button>
+            </div>
+          ) : null}
 
           <div className="menu-cluster">
             <button
@@ -1447,6 +1493,47 @@ export default function PlannerApp() {
             </div>
           )}
 
+          {isEditMode && pendingRecurringDeleteActivity ? (
+            <section
+              aria-label="Delete recurring activity"
+              className="delete-confirm-panel"
+              role="dialog"
+            >
+              <div>
+                <p className="panel-kicker">Recurring activity</p>
+                <h2>Delete {pendingRecurringDeleteActivity.title}?</h2>
+                <p>
+                  Remove only this copy, or this and future copies from the saved months.
+                </p>
+              </div>
+              <div className="delete-confirm-actions">
+                <button
+                  className="ghost-button"
+                  onClick={() => setPendingRecurringDeleteId(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="ghost-button"
+                  onClick={() => deleteScheduledActivity(pendingRecurringDeleteActivity.id)}
+                  type="button"
+                >
+                  Only this
+                </button>
+                <button
+                  className="danger-button"
+                  onClick={() =>
+                    deleteScheduledActivity(pendingRecurringDeleteActivity.id, "future")
+                  }
+                  type="button"
+                >
+                  This and future
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           {isEditMode && editingActivity ? (
             <section className="editor-panel" aria-label="Edit scheduled activity">
               <div className="panel-heading">
@@ -1673,7 +1760,8 @@ export default function PlannerApp() {
         </aside>
         ) : null}
       </section>
-      {renderPrintSheet()}
+      {renderPrintSheet("week")}
+      {renderPrintSheet("month")}
     </main>
   );
 }
