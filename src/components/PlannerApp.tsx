@@ -6,13 +6,11 @@ import {
   Copy,
   Eye,
   Pencil,
-  GripVertical,
   Plus,
   Printer,
   Settings,
   Trash2,
-  Wrench,
-  UserRoundPlus
+  Wrench
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -22,11 +20,12 @@ type ViewMode = "week" | "month";
 type PrintMode = "week" | "month";
 type AppMode = "view" | "edit";
 type OpenMenu = "print" | "settings" | null;
+type IconMenu = "person" | "activity" | "editor" | null;
 
 type Person = {
   id: string;
   name: string;
-  color: string;
+  icon?: string;
 };
 
 type ActivityTemplate = {
@@ -34,6 +33,10 @@ type ActivityTemplate = {
   title: string;
   personIds: string[];
   color: string;
+  icon?: string;
+  isRecurring?: boolean;
+  startTime?: string;
+  endTime?: string;
   notes?: string;
 };
 
@@ -43,10 +46,11 @@ type ScheduledActivity = {
   title: string;
   personIds: string[];
   date: string;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   notes?: string;
   color: string;
+  icon?: string;
 };
 
 type MonthPlan = {
@@ -67,8 +71,62 @@ type PersistedPlanner = {
   viewMode: ViewMode;
 };
 
-const peoplePalette = ["#2563eb", "#059669", "#7c3aed", "#e11d48", "#0891b2"];
-const activityPalette = ["#0ea5e9", "#10b981", "#8b5cf6", "#ec4899", "#84cc16"];
+const activityPalette = [
+  "#0ea5e9",
+  "#10b981",
+  "#8b5cf6",
+  "#ec4899",
+  "#84cc16",
+  "#f59e0b",
+  "#ef4444",
+  "#14b8a6",
+  "#6366f1",
+  "#64748b"
+];
+const personIconGallery = [
+  "💛",
+  "💖",
+  "⭐",
+  "🌈",
+  "🐶",
+  "🐱",
+  "🐻",
+  "🦊",
+  "🐼",
+  "🦁",
+  "🦄",
+  "🐝",
+  "🦋",
+  "💪",
+  "🦸",
+  "🏃",
+  "🧘",
+  "🤸",
+  "🧠",
+  "☀️"
+];
+const activityIconGallery = [
+  "⚽",
+  "🏀",
+  "🏈",
+  "⚾",
+  "🎾",
+  "🏐",
+  "🏉",
+  "🏓",
+  "🏸",
+  "🥊",
+  "🥋",
+  "🏋️‍♀️",
+  "🏋️‍♂️",
+  "🤸‍♀️",
+  "🏊‍♀️",
+  "🚴‍♀️",
+  "🧘‍♀️",
+  "🏃‍♀️",
+  "⛸️",
+  "🛼"
+];
 
 function createId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -272,14 +330,20 @@ function loadPlanner(): PersistedPlanner {
 export default function PlannerApp() {
   const [planner, setPlanner] = useState<PersistedPlanner>(() => loadPlanner());
   const [personName, setPersonName] = useState("");
+  const [personIcon, setPersonIcon] = useState(personIconGallery[0]);
   const [activityTitle, setActivityTitle] = useState("");
   const [activityNotes, setActivityNotes] = useState("");
   const [activityPeople, setActivityPeople] = useState<string[]>([]);
   const [activityColor, setActivityColor] = useState(activityPalette[0]);
+  const [activityIcon, setActivityIcon] = useState(activityIconGallery[0]);
+  const [activityStartTime, setActivityStartTime] = useState("");
+  const [activityEndTime, setActivityEndTime] = useState("");
+  const [activityIsRecurring, setActivityIsRecurring] = useState(false);
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
   const [appMode, setAppMode] = useState<AppMode>("view");
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [openIconMenu, setOpenIconMenu] = useState<IconMenu>(null);
   const isEditMode = appMode === "edit";
 
   const monthLabel = useMemo(
@@ -319,6 +383,20 @@ export default function PlannerApp() {
   }, [planner]);
 
   useEffect(() => {
+    if (!openIconMenu) return;
+
+    const closeIconMenu = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".icon-picker")) {
+        return;
+      }
+      setOpenIconMenu(null);
+    };
+
+    document.addEventListener("pointerdown", closeIconMenu);
+    return () => document.removeEventListener("pointerdown", closeIconMenu);
+  }, [openIconMenu]);
+
+  useEffect(() => {
     if (!printMode) return;
 
     const clearPrintMode = () => setPrintMode(null);
@@ -336,24 +414,22 @@ export default function PlannerApp() {
     const name = personName.trim();
     if (!name) return;
 
-    setPlanner((current) => {
-      const color = peoplePalette[current.state.people.length % peoplePalette.length];
-      return {
-        ...current,
-        state: {
-          ...current.state,
-          people: [
-            ...current.state.people,
-            {
-              id: createId("person"),
-              name,
-              color
-            }
-          ]
-        }
-      };
-    });
+    setPlanner((current) => ({
+      ...current,
+      state: {
+        ...current.state,
+        people: [
+          ...current.state.people,
+          {
+            id: createId("person"),
+            name,
+            icon: personIcon
+          }
+        ]
+      }
+    }));
     setPersonName("");
+    setPersonIcon(personIconGallery[0]);
   }
 
   function toggleActivityPerson(personId: string) {
@@ -362,6 +438,37 @@ export default function PlannerApp() {
         ? current.filter((id) => id !== personId)
         : [...current, personId]
     );
+  }
+
+  function deletePerson(personId: string) {
+    setActivityPeople((current) => current.filter((id) => id !== personId));
+    setPlanner((current) => {
+      const months = Object.fromEntries(
+        Object.entries(current.state.months).map(([monthKey, month]) => [
+          monthKey,
+          {
+            ...month,
+            scheduled: month.scheduled.map((activity) => ({
+              ...activity,
+              personIds: activity.personIds.filter((id) => id !== personId)
+            }))
+          }
+        ])
+      );
+
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          people: current.state.people.filter((person) => person.id !== personId),
+          activityTemplates: current.state.activityTemplates.map((activity) => ({
+            ...activity,
+            personIds: activity.personIds.filter((id) => id !== personId)
+          })),
+          months
+        }
+      };
+    });
   }
 
   function addActivity(event: { preventDefault: () => void }) {
@@ -380,6 +487,10 @@ export default function PlannerApp() {
             title,
             personIds: activityPeople,
             color: activityColor,
+            icon: activityIcon,
+            isRecurring: activityIsRecurring,
+            startTime: activityStartTime || undefined,
+            endTime: activityEndTime || undefined,
             notes: activityNotes.trim() || undefined
           }
         ]
@@ -389,6 +500,10 @@ export default function PlannerApp() {
     setActivityNotes("");
     setActivityPeople([]);
     setActivityColor(activityPalette[0]);
+    setActivityIcon(activityIconGallery[0]);
+    setActivityStartTime("");
+    setActivityEndTime("");
+    setActivityIsRecurring(false);
   }
 
   function deleteActivityTemplate(activityId: string) {
@@ -460,17 +575,28 @@ export default function PlannerApp() {
     );
     if (!template) return;
 
-    const scheduled: ScheduledActivity = {
+    const datesToSchedule = template.isRecurring
+      ? monthWeeks
+          .flat()
+          .filter(
+            (date) =>
+              isSameMonth(date, planner.selectedMonth) &&
+              date.getDay() === dateFromKey(dateKey).getDay()
+          )
+          .map(toDateKey)
+      : [dateKey];
+    const scheduled = datesToSchedule.map((targetDate) => ({
       id: createId("scheduled"),
       templateId: template.id,
       title: template.title,
       personIds: template.personIds,
-      date: dateKey,
-      startTime: "09:00",
-      endTime: "10:00",
+      date: targetDate,
+      startTime: template.startTime,
+      endTime: template.endTime,
       notes: template.notes,
-      color: template.color
-    };
+      color: template.color,
+      icon: template.icon
+    }));
     const targetMonth = monthKeyFromDate(dateFromKey(dateKey));
 
     setPlanner((current) => {
@@ -480,15 +606,18 @@ export default function PlannerApp() {
       };
       const nextState = setMonthScheduled(current.state, targetMonth, [
         ...month.scheduled,
-        scheduled
-      ]);
+        ...scheduled
+      ].sort((a, b) =>
+        `${a.date}${a.startTime ?? ""}`.localeCompare(
+          `${b.date}${b.startTime ?? ""}`
+        )
+      ));
 
       return {
         ...current,
         state: ensureRollingMonths(nextState, current.selectedMonth)
       };
     });
-    setEditingActivityId(scheduled.id);
   }
 
   function updateScheduledActivity(
@@ -527,7 +656,9 @@ export default function PlannerApp() {
             [targetMonth]: {
               monthKey: targetMonth,
               scheduled: [...target.scheduled, updated].sort((a, b) =>
-                `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)
+                `${a.date}${a.startTime ?? ""}`.localeCompare(
+                  `${b.date}${b.startTime ?? ""}`
+                )
               )
             }
           }
@@ -575,6 +706,12 @@ export default function PlannerApp() {
     return planner.state.people.find((person) => person.id === personId);
   }
 
+  function personLabel(personId: string) {
+    const person = personById(personId);
+    if (!person) return "";
+    return person.icon ? `${person.icon} ${person.name}` : person.name;
+  }
+
   function changeMonth(amount: number) {
     setPlanner((current) => {
       const selectedMonth = addMonths(current.selectedMonth, amount);
@@ -611,7 +748,7 @@ export default function PlannerApp() {
   function activitiesForDate(dateKey: string) {
     return visibleMonth
       .filter((activity) => activity.date === dateKey)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
   }
 
   function cloneToNextMonth() {
@@ -655,22 +792,39 @@ export default function PlannerApp() {
     }).format(date);
   }
 
+  function activityTimeLabel(activity: {
+    startTime?: string;
+    endTime?: string;
+  }) {
+    if (activity.startTime && activity.endTime) {
+      return `${activity.startTime} - ${activity.endTime}`;
+    }
+    return activity.startTime || activity.endTime || "";
+  }
+
   function renderPrintActivity(activity: ScheduledActivity) {
+    const timeLabel = activityTimeLabel(activity);
+
     return (
       <article
         className="print-activity"
         key={activity.id}
         style={{ borderLeftColor: activity.color }}
       >
-        <strong>{activity.title}</strong>
-        <span>
-          {activity.startTime} - {activity.endTime}
-        </span>
+        <strong className="activity-heading">
+          {activity.icon ? (
+            <span aria-hidden="true" className="emoji-mark">
+              {activity.icon}
+            </span>
+          ) : null}
+          {activity.title}
+        </strong>
+        {timeLabel ? <span>{timeLabel}</span> : null}
         <span>
           {activity.personIds.length === 0
             ? "Everyone"
             : activity.personIds
-                .map((personId) => personById(personId)?.name)
+                .map(personLabel)
                 .filter(Boolean)
                 .join(", ")}
         </span>
@@ -727,11 +881,11 @@ export default function PlannerApp() {
             ) : (
               planner.state.people.map((person) => (
                 <span key={person.id}>
-                  <span
-                    aria-hidden="true"
-                    className="color-dot"
-                    style={{ backgroundColor: person.color }}
-                  />
+                  {person.icon ? (
+                    <span aria-hidden="true" className="emoji-mark">
+                      {person.icon}
+                    </span>
+                  ) : null}
                   {person.name}
                 </span>
               ))
@@ -758,18 +912,28 @@ export default function PlannerApp() {
   }
 
   function renderScheduledActivity(activity: ScheduledActivity) {
+    const timeLabel = activityTimeLabel(activity);
     const cardContent = (
       <>
-        <strong>{activity.title}</strong>
-        <span>
-          <Clock3 aria-hidden="true" size={12} />
-          {activity.startTime} - {activity.endTime}
-        </span>
+        <strong className="activity-heading">
+          {activity.icon ? (
+            <span aria-hidden="true" className="emoji-mark">
+              {activity.icon}
+            </span>
+          ) : null}
+          {activity.title}
+        </strong>
+        {timeLabel ? (
+          <span>
+            <Clock3 aria-hidden="true" size={12} />
+            {timeLabel}
+          </span>
+        ) : null}
         <span className="scheduled-people">
           {activity.personIds.length === 0
             ? "Everyone"
             : activity.personIds
-                .map((personId) => personById(personId)?.name)
+                .map(personLabel)
                 .filter(Boolean)
                 .join(", ")}
         </span>
@@ -814,6 +978,115 @@ export default function PlannerApp() {
           </div>
         ) : null}
       </article>
+    );
+  }
+
+  function renderActivityTemplate(activity: ActivityTemplate) {
+    const timeLabel = activityTimeLabel(activity);
+
+    return (
+      <article
+        className="activity-card"
+        draggable
+        key={activity.id}
+        onDragStart={(event) => beginActivityDrag(event, activity.id)}
+        style={{ borderLeftColor: activity.color }}
+      >
+        <div>
+          <h3 className="activity-heading">
+            {activity.icon ? (
+              <span aria-hidden="true" className="emoji-mark">
+                {activity.icon}
+              </span>
+            ) : null}
+            {activity.title}
+          </h3>
+          <div className="mini-chip-list">
+            {activity.personIds.length === 0 ? (
+              <span className="muted-label">Everyone</span>
+            ) : (
+              activity.personIds.map((personId) => {
+                const person = personById(personId);
+                if (!person) return null;
+                return (
+                  <span className="mini-chip" key={personId}>
+                    {person.icon ? (
+                      <span aria-hidden="true" className="emoji-mark">
+                        {person.icon}
+                      </span>
+                    ) : null}
+                    {person.name}
+                  </span>
+                );
+              })
+            )}
+            {activity.isRecurring ? (
+              <span className="muted-label">Recurring</span>
+            ) : null}
+            {timeLabel ? <span className="muted-label">{timeLabel}</span> : null}
+          </div>
+          {activity.notes ? <p>{activity.notes}</p> : null}
+        </div>
+        <button
+          aria-label={`Delete ${activity.title}`}
+          className="icon-button"
+          onClick={() => deleteActivityTemplate(activity.id)}
+          type="button"
+        >
+          <Trash2 aria-hidden="true" size={16} />
+        </button>
+      </article>
+    );
+  }
+
+  function renderIconPicker({
+    id,
+    label,
+    value,
+    icons,
+    onChange
+  }: {
+    id: Exclude<IconMenu, null>;
+    label: string;
+    value: string;
+    icons: string[];
+    onChange: (icon: string) => void;
+  }) {
+    const isOpen = openIconMenu === id;
+
+    return (
+      <div className="icon-picker">
+        <button
+          aria-expanded={isOpen}
+          aria-label={label}
+          aria-haspopup="listbox"
+          className="icon-picker-button"
+          onClick={() => setOpenIconMenu((current) => (current === id ? null : id))}
+          type="button"
+        >
+          <span aria-hidden="true">{value}</span>
+        </button>
+        {isOpen ? (
+          <div className="icon-picker-popover" role="listbox" aria-label={label}>
+            {icons.map((icon) => (
+              <button
+                aria-label={`Use ${icon}`}
+                aria-selected={value === icon}
+                className="icon-picker-option"
+                key={icon}
+                onClick={() => {
+                  onChange(icon);
+                  setOpenIconMenu(null);
+                }}
+                role="option"
+                type="button"
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -976,19 +1249,24 @@ export default function PlannerApp() {
         aria-label="Planner workspace"
       >
         {isEditMode ? (
-          <aside className="side-panel">
+          <aside className="side-panel people-panel">
           <div className="panel-heading">
             <div>
-              <p className="panel-kicker">Roster</p>
               <h2>People</h2>
             </div>
-            <UserRoundPlus aria-hidden="true" size={18} />
           </div>
 
           <form className="stacked-form" onSubmit={addPerson}>
-            <label htmlFor="person-name">Name</label>
-            <div className="inline-entry">
+            <div className="inline-entry person-entry">
+              {renderIconPicker({
+                id: "person",
+                label: "Person icon",
+                value: personIcon,
+                icons: personIconGallery,
+                onChange: setPersonIcon
+              })}
               <input
+                aria-label="Person name"
                 id="person-name"
                 value={personName}
                 onChange={(event) => setPersonName(event.target.value)}
@@ -1002,16 +1280,24 @@ export default function PlannerApp() {
 
           <div className="chip-list" aria-label="Created people">
             {planner.state.people.length === 0 ? (
-              <p className="empty-note">Add people to color-code activities.</p>
+              <p className="empty-note">Add people to assign activities.</p>
             ) : (
               planner.state.people.map((person) => (
                 <span className="person-chip" key={person.id}>
-                  <span
-                    aria-hidden="true"
-                    className="color-dot"
-                    style={{ backgroundColor: person.color }}
-                  />
+                  {person.icon ? (
+                    <span aria-hidden="true" className="emoji-mark">
+                      {person.icon}
+                    </span>
+                  ) : null}
                   {person.name}
+                  <button
+                    aria-label={`Remove ${person.name}`}
+                    className="chip-remove-button"
+                    onClick={() => deletePerson(person.id)}
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={13} />
+                  </button>
                 </span>
               ))
             )}
@@ -1019,7 +1305,20 @@ export default function PlannerApp() {
         </aside>
         ) : null}
 
-        <section className="calendar-surface">
+        <section className="calendar-surface calendar-panel">
+          {isEditMode ? (
+            <section className="drag-tray" aria-label="Ready to drag activities">
+              <p className="panel-kicker">Ready to drag</p>
+              <div className="activity-list calendar-activity-list">
+                {planner.state.activityTemplates.length === 0 ? (
+                  <p className="empty-note">Create reusable activities below.</p>
+                ) : (
+                  planner.state.activityTemplates.map(renderActivityTemplate)
+                )}
+              </div>
+            </section>
+          ) : null}
+
           {planner.viewMode === "week" ? (
             <div className="calendar-view">
               <div className="calendar-view-header">
@@ -1160,59 +1459,63 @@ export default function PlannerApp() {
                   onClick={() => setEditingActivityId(null)}
                   type="button"
                 >
-                  Done
+                  Save
                 </button>
               </div>
 
               <div className="editor-grid">
-                <label>
+                <label className="editor-field editor-title-field">
                   Title
-                  <input
-                    value={editingActivity.title}
-                    onChange={(event) =>
-                      updateScheduledActivity(editingActivity.id, {
-                        title: event.target.value
-                      })
-                    }
-                  />
+                  <div className="input-with-icon">
+                    {renderIconPicker({
+                      id: "editor",
+                      label: "Activity icon",
+                      value: editingActivity.icon ?? activityIconGallery[0],
+                      icons: activityIconGallery,
+                      onChange: (icon) =>
+                        updateScheduledActivity(editingActivity.id, {
+                          icon
+                        })
+                    })}
+                    <input
+                      value={editingActivity.title}
+                      onChange={(event) =>
+                        updateScheduledActivity(editingActivity.id, {
+                          title: event.target.value
+                        })
+                      }
+                    />
+                  </div>
                 </label>
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={editingActivity.date}
-                    onChange={(event) =>
-                      updateScheduledActivity(editingActivity.id, {
-                        date: event.target.value
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  Start
-                  <input
-                    type="time"
-                    value={editingActivity.startTime}
-                    onChange={(event) =>
-                      updateScheduledActivity(editingActivity.id, {
-                        startTime: event.target.value
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  End
-                  <input
-                    type="time"
-                    value={editingActivity.endTime}
-                    onChange={(event) =>
-                      updateScheduledActivity(editingActivity.id, {
-                        endTime: event.target.value
-                      })
-                    }
-                  />
-                </label>
-                <label className="editor-wide">
+                <div className="time-entry editor-time-entry">
+                  <label className="time-field">
+                    <span>From</span>
+                    <input
+                      aria-label="Scheduled start time"
+                      type="time"
+                      value={editingActivity.startTime ?? ""}
+                      onChange={(event) =>
+                        updateScheduledActivity(editingActivity.id, {
+                          startTime: event.target.value || undefined
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="time-field">
+                    <span>To</span>
+                    <input
+                      aria-label="Scheduled end time"
+                      type="time"
+                      value={editingActivity.endTime ?? ""}
+                      onChange={(event) =>
+                        updateScheduledActivity(editingActivity.id, {
+                          endTime: event.target.value || undefined
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="editor-field editor-wide">
                   Notes
                   <textarea
                     rows={3}
@@ -1239,11 +1542,11 @@ export default function PlannerApp() {
                             }
                             type="checkbox"
                           />
-                          <span
-                            aria-hidden="true"
-                            className="color-dot"
-                            style={{ backgroundColor: person.color }}
-                          />
+                          {person.icon ? (
+                            <span aria-hidden="true" className="emoji-mark">
+                              {person.icon}
+                            </span>
+                          ) : null}
                           {person.name}
                         </label>
                       ))
@@ -1256,32 +1559,60 @@ export default function PlannerApp() {
         </section>
 
         {isEditMode ? (
-          <aside className="side-panel">
+          <aside className="side-panel activities-panel">
           <div className="panel-heading">
             <div>
-              <p className="panel-kicker">Drag templates</p>
               <h2>Activities</h2>
             </div>
-            <GripVertical aria-hidden="true" size={18} />
           </div>
 
           <form className="stacked-form activity-form" onSubmit={addActivity}>
-            <label htmlFor="activity-title">Activity</label>
-            <input
-              id="activity-title"
-              value={activityTitle}
-              onChange={(event) => setActivityTitle(event.target.value)}
-              placeholder="Swimming, piano, playdate..."
-            />
+            <div className="inline-entry activity-title-entry">
+              {renderIconPicker({
+                id: "activity",
+                label: "Activity icon",
+                value: activityIcon,
+                icons: activityIconGallery,
+                onChange: setActivityIcon
+              })}
+              <input
+                aria-label="Activity name"
+                id="activity-title"
+                value={activityTitle}
+                onChange={(event) => setActivityTitle(event.target.value)}
+                placeholder="Gym, football..."
+              />
+            </div>
 
-            <label htmlFor="activity-notes">Notes</label>
-            <textarea
-              id="activity-notes"
-              value={activityNotes}
-              onChange={(event) => setActivityNotes(event.target.value)}
-              placeholder="Optional details"
-              rows={3}
-            />
+            <div className="time-entry">
+              <label className="time-field">
+                <span>From</span>
+                <input
+                  aria-label="Optional start time"
+                  type="time"
+                  value={activityStartTime}
+                  onChange={(event) => setActivityStartTime(event.target.value)}
+                />
+              </label>
+              <label className="time-field">
+                <span>To</span>
+                <input
+                  aria-label="Optional end time"
+                  type="time"
+                  value={activityEndTime}
+                  onChange={(event) => setActivityEndTime(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="check-chip full-width-check">
+              <input
+                checked={activityIsRecurring}
+                onChange={(event) => setActivityIsRecurring(event.target.checked)}
+                type="checkbox"
+              />
+              Recurring on same weekday
+            </label>
 
             <fieldset>
               <legend>People</legend>
@@ -1296,11 +1627,11 @@ export default function PlannerApp() {
                         onChange={() => toggleActivityPerson(person.id)}
                         type="checkbox"
                       />
-                      <span
-                        aria-hidden="true"
-                        className="color-dot"
-                        style={{ backgroundColor: person.color }}
-                      />
+                      {person.icon ? (
+                        <span aria-hidden="true" className="emoji-mark">
+                          {person.icon}
+                        </span>
+                      ) : null}
                       {person.name}
                     </label>
                   ))
@@ -1324,60 +1655,21 @@ export default function PlannerApp() {
               </div>
             </fieldset>
 
+            <textarea
+              aria-label="Activity notes"
+              id="activity-notes"
+              value={activityNotes}
+              onChange={(event) => setActivityNotes(event.target.value)}
+              placeholder="Optional details"
+              rows={3}
+            />
+
             <button className="primary-action" type="submit">
               <Plus aria-hidden="true" size={18} />
               Add activity
             </button>
           </form>
 
-          <div className="activity-list" aria-label="Reusable activities">
-            {planner.state.activityTemplates.length === 0 ? (
-              <p className="empty-note">Create reusable activities to drag onto days.</p>
-            ) : (
-              planner.state.activityTemplates.map((activity) => (
-                <article
-                  className="activity-card"
-                  draggable
-                  key={activity.id}
-                  onDragStart={(event) => beginActivityDrag(event, activity.id)}
-                  style={{ borderLeftColor: activity.color }}
-                >
-                  <div>
-                    <h3>{activity.title}</h3>
-                    <div className="mini-chip-list">
-                      {activity.personIds.length === 0 ? (
-                        <span className="muted-label">Everyone</span>
-                      ) : (
-                        activity.personIds.map((personId) => {
-                          const person = personById(personId);
-                          if (!person) return null;
-                          return (
-                            <span className="mini-chip" key={personId}>
-                              <span
-                                aria-hidden="true"
-                                className="color-dot"
-                                style={{ backgroundColor: person.color }}
-                              />
-                              {person.name}
-                            </span>
-                          );
-                        })
-                      )}
-                    </div>
-                    {activity.notes ? <p>{activity.notes}</p> : null}
-                  </div>
-                  <button
-                    aria-label={`Delete ${activity.title}`}
-                    className="icon-button"
-                    onClick={() => deleteActivityTemplate(activity.id)}
-                    type="button"
-                  >
-                    <Trash2 aria-hidden="true" size={16} />
-                  </button>
-                </article>
-              ))
-            )}
-          </div>
         </aside>
         ) : null}
       </section>
@@ -1399,6 +1691,7 @@ export type {
 };
 
 export {
+  activityIconGallery,
   activityPalette,
   addDays,
   addMonths,
@@ -1415,7 +1708,7 @@ export {
   isWeekend,
   monthDateFromKey,
   monthKeyFromDate,
-  peoplePalette,
+  personIconGallery,
   remapDateByWeekPattern,
   startOfMondayWeek,
   toDateKey

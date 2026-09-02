@@ -307,13 +307,29 @@ h2 {
 
 .planner-workspace {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-areas:
+    "calendar calendar"
+    "people activities";
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
   gap: 16px;
   align-items: start;
 }
 
 .planner-workspace.calendar-only {
+  grid-template-areas: "calendar";
   grid-template-columns: minmax(0, 1fr);
+}
+
+.calendar-panel {
+  grid-area: calendar;
+}
+
+.people-panel {
+  grid-area: people;
+}
+
+.activities-panel {
+  grid-area: activities;
 }
 
 .view-mode .calendar-surface {
@@ -376,6 +392,14 @@ h2 {
 .calendar-view {
   display: grid;
   gap: 14px;
+}
+
+.drag-tray {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .calendar-view-header {
@@ -569,12 +593,21 @@ div.scheduled-main {
   gap: 12px;
 }
 
-.editor-grid label {
+.editor-field,
+.editor-grid > .time-entry {
   display: grid;
   gap: 6px;
   color: #334155;
   font-size: 0.82rem;
   font-weight: 500;
+}
+
+.editor-title-field {
+  grid-column: span 2;
+}
+
+.editor-time-entry {
+  grid-column: span 2;
 }
 
 .editor-wide {
@@ -753,6 +786,89 @@ fieldset {
   gap: 8px;
 }
 
+.person-entry {
+  grid-template-columns: 54px minmax(0, 1fr) 42px;
+}
+
+.activity-title-entry,
+.input-with-icon {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.time-entry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.time-field {
+  display: grid;
+  gap: 4px;
+}
+
+.time-field span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.icon-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.icon-picker-button {
+  display: grid;
+  width: 100%;
+  min-height: 42px;
+  place-items: center;
+  border: 1px solid #d8dee9;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 1.06rem;
+}
+
+.icon-picker-button:hover,
+.icon-picker-button[aria-expanded="true"] {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.icon-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  width: min(260px, 78vw);
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+}
+
+.icon-picker-option {
+  display: grid;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 1rem;
+}
+
+.icon-picker-option:hover,
+.icon-picker-option[aria-selected="true"] {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
 .inline-entry button,
 .icon-button {
   display: inline-grid;
@@ -765,6 +881,34 @@ fieldset {
   color: #ffffff;
 }
 
+.inline-entry .icon-picker-button {
+  width: 100%;
+  border: 1px solid #d8dee9;
+  background: #ffffff;
+  color: #111827;
+}
+
+.inline-entry .icon-picker-button:hover,
+.inline-entry .icon-picker-button[aria-expanded="true"] {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.inline-entry .icon-picker-option {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+}
+
+.inline-entry .icon-picker-option:hover,
+.inline-entry .icon-picker-option[aria-selected="true"] {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #111827;
+}
+
 .icon-button {
   background: transparent;
   color: #ef4444;
@@ -774,6 +918,22 @@ fieldset {
   background: #fff1f2;
 }
 
+.chip-remove-button {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  margin-right: -4px;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+}
+
+.chip-remove-button:hover {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
 .chip-list,
 .mini-chip-list,
 .person-options,
@@ -781,6 +941,16 @@ fieldset {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.emoji-mark {
+  line-height: 1;
+}
+
+.activity-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .person-chip,
@@ -811,18 +981,16 @@ fieldset {
   cursor: pointer;
 }
 
+.full-width-check {
+  justify-content: flex-start;
+  width: 100%;
+  border-radius: 7px;
+}
+
 .check-chip input {
   width: 14px;
   min-height: 14px;
   accent-color: #2563eb;
-}
-
-.color-dot {
-  width: 0.68rem;
-  height: 0.68rem;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 .swatch-row {
@@ -859,6 +1027,13 @@ fieldset {
   gap: 10px;
 }
 
+.calendar-activity-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+}
+
 .activity-card {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -889,6 +1064,16 @@ fieldset {
 
 .activity-card[draggable="true"]:active {
   cursor: grabbing;
+}
+
+.calendar-activity-list .activity-card {
+  width: clamp(190px, 24vw, 280px);
+  flex: 0 0 auto;
+  padding: 10px;
+}
+
+.calendar-activity-list .activity-card p {
+  display: none;
 }
 
 .empty-note,
@@ -935,6 +1120,10 @@ fieldset {
 
   .planner-workspace {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "calendar"
+      "people"
+      "activities";
   }
 }
 
