@@ -1379,3 +1379,7 @@ fieldset {
     color: #1d4ed8;
   }
 }
+.sync-status { padding: .5rem 0; color: #475569; font-size: .85rem; }
+.sync-notice { padding: 1rem; margin: .5rem 0; background: #fff7ed; border: 1px solid #fdba74; border-radius: .75rem; }
+.sync-notice button { margin: .5rem; }
+@media print { .sync-status, .sync-notice { display: none !important; } }

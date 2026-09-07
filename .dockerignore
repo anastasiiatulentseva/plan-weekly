@@ -1,0 +1,15 @@
+.git
+.github
+.env*
+node_modules
+dist
+.astro
+test-results
+playwright-report
+tests
+playwright.config.ts
+.agents
+.codex
+.vscode
+.idea
+*.log

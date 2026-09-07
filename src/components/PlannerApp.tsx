@@ -14,65 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "plan-by-week:v1";
-
-type ViewMode = "week" | "month";
-type PrintMode = "week" | "month";
-type AppMode = "view" | "edit";
-type OpenMenu = "settings" | null;
-type IconMenu = "person" | "activity" | "editor" | null;
-type DeleteScope = "single" | "future";
-
-type Person = {
-  id: string;
-  name: string;
-  icon?: string;
-};
-
-type ActivityTemplate = {
-  id: string;
-  title: string;
-  personIds: string[];
-  color: string;
-  icon?: string;
-  isRecurring?: boolean;
-  startTime?: string;
-  endTime?: string;
-  notes?: string;
-};
-
-type ScheduledActivity = {
-  id: string;
-  templateId?: string;
-  recurrenceId?: string;
-  isRecurring?: boolean;
-  title: string;
-  personIds: string[];
-  date: string;
-  startTime?: string;
-  endTime?: string;
-  notes?: string;
-  color: string;
-  icon?: string;
-};
-
-type MonthPlan = {
-  monthKey: string;
-  scheduled: ScheduledActivity[];
-};
-
-type PlannerState = {
-  people: Person[];
-  activityTemplates: ActivityTemplate[];
-  months: Record<string, MonthPlan>;
-};
-
-type PersistedPlanner = {
-  state: PlannerState;
-  selectedMonth: string;
-  selectedWeekStart: string;
-  viewMode: ViewMode;
-};
+import { createId, toDateKey, monthKeyFromDate, dateFromKey, monthDateFromKey, addDays, addMonths, startOfMondayWeek, isSameMonth, isWeekend, isToday, getWeekDays, getMonthWeeks, getFirstWeekStartForMonth, clampWeekToMonth, getMonthLabel, getWeekdayDateLabel, remapDateByWeekPattern, isTimeRangeValid, getScheduleDatesForTemplate, isNavigableMonth, ensureRollingMonths, findScheduledActivity, isRecurringScheduledActivity, isFutureRecurringMatch } from "../shared/planner";
+import type { ViewMode, PrintMode, AppMode, OpenMenu, IconMenu, DeleteScope, Person, ActivityTemplate, ScheduledActivity, MonthPlan, PlannerState, PersistedPlanner } from "../shared/planner";
+import { api, usePlanner } from "../client/usePlanner";
 
 const activityPalette = [
   "#0ea5e9",
@@ -131,281 +75,9 @@ const activityIconGallery = [
   "🛼"
 ];
 
-function createId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function monthKeyFromDate(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  return `${year}-${month}`;
-}
-
-function dateFromKey(dateKey: string) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function monthDateFromKey(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month - 1, 1);
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function addMonths(monthKey: string, amount: number) {
-  const date = monthDateFromKey(monthKey);
-  date.setMonth(date.getMonth() + amount);
-  return monthKeyFromDate(date);
-}
-
-function startOfMondayWeek(date: Date) {
-  const day = date.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  return addDays(date, offset);
-}
-
-function isSameMonth(date: Date, monthKey: string) {
-  return monthKeyFromDate(date) === monthKey;
-}
-
-function isWeekend(date: Date) {
-  const day = date.getDay();
-  return day === 0 || day === 6;
-}
-
-function isToday(date: Date) {
-  return toDateKey(date) === toDateKey(new Date());
-}
-
-function getWeekDays(weekStartKey: string) {
-  const weekStart = dateFromKey(weekStartKey);
-  return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
-}
-
-function getMonthWeeks(monthKey: string) {
-  const firstDay = monthDateFromKey(monthKey);
-  const lastDay = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0);
-  const firstWeekStart = startOfMondayWeek(firstDay);
-  const lastWeekStart = startOfMondayWeek(lastDay);
-  const weeks: Date[][] = [];
-
-  for (
-    let weekStart = firstWeekStart;
-    weekStart <= lastWeekStart;
-    weekStart = addDays(weekStart, 7)
-  ) {
-    weeks.push(Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)));
-  }
-
-  return weeks;
-}
-
-function getFirstWeekStartForMonth(monthKey: string) {
-  return toDateKey(startOfMondayWeek(monthDateFromKey(monthKey)));
-}
-
-function clampWeekToMonth(weekStartKey: string, monthKey: string) {
-  const weeks = getMonthWeeks(monthKey).map((week) => toDateKey(week[0]));
-  return weeks.includes(weekStartKey) ? weekStartKey : weeks[0];
-}
-
-function getMonthLabel(monthKey: string) {
-  return new Intl.DateTimeFormat("en-IE", {
-    month: "long",
-    year: "numeric"
-  }).format(monthDateFromKey(monthKey));
-}
-
-function getWeekdayDateLabel(date: Date) {
-  const weekday = new Intl.DateTimeFormat("en-IE", { weekday: "short" }).format(date);
-  const day = new Intl.DateTimeFormat("en-IE", { day: "numeric" }).format(date);
-  const month = new Intl.DateTimeFormat("en-IE", { month: "short" }).format(date);
-  return `${weekday}, ${day} ${month}`;
-}
-
-function remapDateByWeekPattern(dateKey: string, sourceMonth: string, targetMonth: string) {
-  const sourceDate = dateFromKey(dateKey);
-  const sourceWeekday = sourceDate.getDay();
-  const sourceOrdinal =
-    getMonthWeeks(sourceMonth)
-      .flat()
-      .filter(
-        (date) =>
-          isSameMonth(date, sourceMonth) &&
-          date.getDay() === sourceWeekday &&
-          date <= sourceDate
-      ).length || 1;
-  const targetCandidates = getMonthWeeks(targetMonth)
-    .flat()
-    .filter(
-      (date) => isSameMonth(date, targetMonth) && date.getDay() === sourceWeekday
-    );
-  const targetDate =
-    targetCandidates[Math.min(sourceOrdinal - 1, targetCandidates.length - 1)] ??
-    monthDateFromKey(targetMonth);
-
-  return toDateKey(targetDate);
-}
-
-function isTimeRangeValid(startTime?: string, endTime?: string) {
-  return !startTime || !endTime || startTime <= endTime;
-}
-
-function getScheduleDatesForTemplate(
-  template: ActivityTemplate,
-  dateKey: string,
-  selectedMonth: string
-) {
-  if (!template.isRecurring) return [dateKey];
-
-  const selectedDate = dateFromKey(dateKey);
-  return getMonthWeeks(selectedMonth)
-    .flat()
-    .filter((date) => {
-      const targetDateKey = toDateKey(date);
-      return (
-        isSameMonth(date, selectedMonth) &&
-        date.getDay() === selectedDate.getDay() &&
-        targetDateKey >= dateKey
-      );
-    })
-    .map(toDateKey);
-}
-
-function isNavigableMonth(monthKey: string, baseMonth = monthKeyFromDate(new Date())) {
-  return monthKey >= addMonths(baseMonth, -1) && monthKey <= addMonths(baseMonth, 1);
-}
-
-function emptyState(): PlannerState {
-  const currentMonth = monthKeyFromDate(new Date());
-  return {
-    people: [],
-    activityTemplates: [],
-    months: {
-      [currentMonth]: {
-        monthKey: currentMonth,
-        scheduled: []
-      }
-    }
-  };
-}
-
-function ensureRollingMonths(state: PlannerState, selectedMonth: string) {
-  const allowed = new Set([
-    addMonths(selectedMonth, -1),
-    selectedMonth,
-    addMonths(selectedMonth, 1)
-  ]);
-  const months = Object.fromEntries(
-    Object.entries(state.months).filter(([monthKey]) => allowed.has(monthKey))
-  );
-
-  allowed.forEach((monthKey) => {
-    months[monthKey] ??= { monthKey, scheduled: [] };
-  });
-
-  return { ...state, months };
-}
-
-function findScheduledActivity(state: PlannerState, activityId: string) {
-  return Object.values(state.months)
-    .flatMap((month) => month.scheduled)
-    .find((activity) => activity.id === activityId);
-}
-
-function isRecurringScheduledActivity(
-  activity: ScheduledActivity,
-  state: PlannerState
-) {
-  if (activity.isRecurring || activity.recurrenceId) return true;
-  const template = state.activityTemplates.find(
-    (candidate) => candidate.id === activity.templateId
-  );
-  return Boolean(template?.isRecurring);
-}
-
-function isFutureRecurringMatch(
-  candidate: ScheduledActivity,
-  target: ScheduledActivity,
-  state: PlannerState
-) {
-  if (candidate.id === target.id) return true;
-  if (candidate.date < target.date) return false;
-
-  if (target.recurrenceId) {
-    return candidate.recurrenceId === target.recurrenceId;
-  }
-
-  if (!target.templateId || candidate.templateId !== target.templateId) {
-    return false;
-  }
-
-  const template = state.activityTemplates.find(
-    (activity) => activity.id === target.templateId
-  );
-  const isRecurring = candidate.isRecurring || candidate.recurrenceId || template?.isRecurring;
-  return (
-    Boolean(isRecurring) &&
-    dateFromKey(candidate.date).getDay() === dateFromKey(target.date).getDay()
-  );
-}
-
-function loadPlanner(): PersistedPlanner {
-  const selectedMonth = monthKeyFromDate(new Date());
-  const selectedWeekStart = toDateKey(startOfMondayWeek(new Date()));
-
-  if (typeof window === "undefined") {
-    return {
-      state: emptyState(),
-      selectedMonth,
-      selectedWeekStart,
-      viewMode: "week"
-    };
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return {
-      state: ensureRollingMonths(emptyState(), selectedMonth),
-      selectedMonth,
-      selectedWeekStart,
-      viewMode: "week"
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<PersistedPlanner>;
-    const safeMonth = parsed.selectedMonth ?? selectedMonth;
-    return {
-      state: ensureRollingMonths(parsed.state ?? emptyState(), safeMonth),
-      selectedMonth: safeMonth,
-      selectedWeekStart: parsed.selectedWeekStart ?? selectedWeekStart,
-      viewMode: parsed.viewMode === "month" ? "month" : "week"
-    };
-  } catch {
-    return {
-      state: ensureRollingMonths(emptyState(), selectedMonth),
-      selectedMonth,
-      selectedWeekStart,
-      viewMode: "week"
-    };
-  }
-}
-
 export default function PlannerApp() {
-  const [planner, setPlanner] = useState<PersistedPlanner>(() => loadPlanner());
+  const { planner, setPlanner, auth, status, notice, setNotice, saving, mutate, refresh, leave, retry, canRetry, conflictLatest } = usePlanner();
+  const [draft, setDraft] = useState<ScheduledActivity | null>(null);
   const [personName, setPersonName] = useState("");
   const [personIcon, setPersonIcon] = useState(personIconGallery[0]);
   const [activityTitle, setActivityTitle] = useState("");
@@ -460,18 +132,31 @@ export default function PlannerApp() {
       null
     );
   }, [planner.state.activityTemplates, selectedTemplateId]);
-  const editingActivity = useMemo(() => {
-    if (!editingActivityId) return null;
-    return findScheduledActivity(planner.state, editingActivityId);
-  }, [editingActivityId, planner.state.months]);
+  const editingActivity = draft;
+  const visibleActivity = editingActivityId ? findScheduledActivity(planner.state, editingActivityId) : null;
+  const latestActivity = conflictLatest?.id === editingActivityId && (!visibleActivity || conflictLatest.version > visibleActivity.version) ? conflictLatest : visibleActivity;
+  const draftIsStale = Boolean(draft && (!latestActivity || draft.version !== latestActivity.version));
+  function openEditor(id: string) {
+    const activity = findScheduledActivity(planner.state, id);
+    if (activity) { setDraft(structuredClone(activity)); setEditingActivityId(id); setNotice(''); }
+  }
+  async function saveDraft() {
+    if (!draft) return;
+    const { id, version, templateId, recurrenceId, ...fields } = draft;
+    const ok = await mutate('scheduled/' + id, 'PATCH', { ...fields, expectedVersion: version }, current => replaceScheduled(current, { ...draft, version: version + 1 }));
+    if (ok) { setDraft(null); setEditingActivityId(null); }
+  }
+  function replaceScheduled(current: PersistedPlanner, activity: ScheduledActivity) {
+    const months = Object.fromEntries(Object.entries(current.state.months).map(([key, month]) => [key, { ...month, scheduled: month.scheduled.filter(a => a.id !== activity.id) }]));
+    const key = activity.date.slice(0, 7);
+    (months[key] ??= { monthKey: key, scheduled: [] }).scheduled.push(activity);
+    return { ...current, state: { ...current.state, months } };
+  }
   const pendingRecurringDeleteActivity = useMemo(() => {
     if (!pendingRecurringDeleteId) return null;
     return findScheduledActivity(planner.state, pendingRecurringDeleteId);
   }, [pendingRecurringDeleteId, planner.state.months]);
 
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(planner));
-  }, [planner]);
 
   useEffect(() => {
     if (!openIconMenu) return;
@@ -489,25 +174,9 @@ export default function PlannerApp() {
 
   function addPerson(event: { preventDefault: () => void }) {
     event.preventDefault();
-    const name = personName.trim();
-    if (!name) return;
-
-    setPlanner((current) => ({
-      ...current,
-      state: {
-        ...current.state,
-        people: [
-          ...current.state.people,
-          {
-            id: createId("person"),
-            name,
-            icon: personIcon
-          }
-        ]
-      }
-    }));
-    setPersonName("");
-    setPersonIcon(personIconGallery[0]);
+    const name = personName.trim(); if (!name) return;
+    const input = { name, icon: personIcon, idempotencyKey: crypto.randomUUID() };
+    void mutate('people', 'POST', input, current => ({ ...current, state: { ...current.state, people: [...current.state.people, { ...input, id: createId('pending'), version: 1 }] } })).then(ok => { if (ok) { setPersonName(''); setPersonIcon(personIconGallery[0]); } });
   }
 
   function toggleActivityPerson(personId: string) {
@@ -519,99 +188,23 @@ export default function PlannerApp() {
   }
 
   function deletePerson(personId: string) {
-    setActivityPeople((current) => current.filter((id) => id !== personId));
-    setPlanner((current) => {
-      const months = Object.fromEntries(
-        Object.entries(current.state.months).map(([monthKey, month]) => [
-          monthKey,
-          {
-            ...month,
-            scheduled: month.scheduled.map((activity) => ({
-              ...activity,
-              personIds: activity.personIds.filter((id) => id !== personId)
-            }))
-          }
-        ])
-      );
-
-      return {
-        ...current,
-        state: {
-          ...current.state,
-          people: current.state.people.filter((person) => person.id !== personId),
-          activityTemplates: current.state.activityTemplates.map((activity) => ({
-            ...activity,
-            personIds: activity.personIds.filter((id) => id !== personId)
-          })),
-          months
-        }
-      };
-    });
+    const person = planner.state.people.find(p => p.id === personId); if (!person) return;
+    void mutate('people/' + personId, 'DELETE', { expectedVersion: person.version }, current => ({ ...current, state: { ...current.state, people: current.state.people.filter(p => p.id !== personId) } })).then(ok => { if (ok) setActivityPeople(ids => ids.filter(id => id !== personId)); });
   }
 
   function addActivity(event: { preventDefault: () => void }) {
     event.preventDefault();
-    const title = activityTitle.trim();
-    if (!title || !activityTimeRangeIsValid) return;
-
-    setPlanner((current) => ({
-      ...current,
-      state: {
-        ...current.state,
-        activityTemplates: [
-          ...current.state.activityTemplates,
-          {
-            id: createId("activity"),
-            title,
-            personIds: activityPeople,
-            color: activityColor,
-            icon: activityIcon,
-            isRecurring: activityIsRecurring,
-            startTime: activityStartTime || undefined,
-            endTime: activityEndTime || undefined,
-            notes: activityNotes.trim() || undefined
-          }
-        ]
-      }
-    }));
-    setActivityTitle("");
-    setActivityNotes("");
-    setActivityPeople([]);
-    setActivityColor(activityPalette[0]);
-    setActivityIcon(activityIconGallery[0]);
-    setActivityStartTime("");
-    setActivityEndTime("");
-    setActivityIsRecurring(false);
+    if (!canAddActivity) return;
+    const input = { title: activityTitle.trim(), personIds: activityPeople, color: activityColor, icon: activityIcon, isRecurring: activityIsRecurring, startTime: activityStartTime || undefined, endTime: activityEndTime || undefined, notes: activityNotes.trim() || undefined, idempotencyKey: crypto.randomUUID() };
+    void mutate('templates', 'POST', input, current => ({ ...current, state: { ...current.state, activityTemplates: [...current.state.activityTemplates, { ...input, id: createId('pending'), version: 1 }] } })).then(ok => {
+      if (ok) { setActivityTitle(''); setActivityNotes(''); setActivityPeople([]); setActivityColor(activityPalette[0]); setActivityIcon(activityIconGallery[0]); setActivityStartTime(''); setActivityEndTime(''); setActivityIsRecurring(false); }
+    });
   }
 
   function deleteActivityTemplate(activityId: string) {
-    setSelectedTemplateId((current) => (current === activityId ? null : current));
-    setPlanner((current) => ({
-      ...current,
-      state: {
-        ...current.state,
-        activityTemplates: current.state.activityTemplates.filter(
-          (activity) => activity.id !== activityId
-        )
-      }
-    }));
-  }
-
-  function setMonthScheduled(
-    state: PlannerState,
-    monthKey: string,
-    scheduled: ScheduledActivity[]
-  ) {
-    return {
-      ...state,
-      months: {
-        ...state.months,
-        [monthKey]: {
-          monthKey,
-          scheduled
-        }
-      }
-    };
+    const template = planner.state.activityTemplates.find(a => a.id === activityId); if (!template) return;
+    void mutate('templates/' + activityId, 'DELETE', { expectedVersion: template.version }, current => ({ ...current, state: { ...current.state, activityTemplates: current.state.activityTemplates.filter(a => a.id !== activityId) } }));
+    setSelectedTemplateId(null);
   }
 
   function beginActivityDrag(
@@ -653,116 +246,20 @@ export default function PlannerApp() {
 
   function scheduleTemplateOnDate(templateId: string, dateKey: string) {
     if (!isEditMode || !isSameMonth(dateFromKey(dateKey), planner.selectedMonth)) return;
-    const targetMonth = monthKeyFromDate(dateFromKey(dateKey));
-
-    setPlanner((current) => {
-      const template = current.state.activityTemplates.find(
-        (activity) => activity.id === templateId
-      );
-      if (!template) return current;
-
-      const datesToSchedule = getScheduleDatesForTemplate(
-        template,
-        dateKey,
-        current.selectedMonth
-      );
-      const recurrenceId = template.isRecurring ? createId("recurrence") : undefined;
-      const scheduled = datesToSchedule.map((targetDate) => ({
-        id: createId("scheduled"),
-        templateId: template.id,
-        recurrenceId,
-        isRecurring: template.isRecurring || undefined,
-        title: template.title,
-        personIds: template.personIds,
-        date: targetDate,
-        startTime: template.startTime,
-        endTime: template.endTime,
-        notes: template.notes,
-        color: template.color,
-        icon: template.icon
-      }));
-      const month = current.state.months[targetMonth] ?? {
-        monthKey: targetMonth,
-        scheduled: []
-      };
-      const nextState = setMonthScheduled(current.state, targetMonth, [
-        ...month.scheduled,
-        ...scheduled
-      ].sort((a, b) =>
-        `${a.date}${a.startTime ?? ""}`.localeCompare(
-          `${b.date}${b.startTime ?? ""}`
-        )
-      ));
-
-      return {
-        ...current,
-        state: ensureRollingMonths(nextState, current.selectedMonth)
-      };
-    });
+    const template = planner.state.activityTemplates.find(a => a.id === templateId); if (!template) return;
+    const recurrenceId = template.isRecurring ? createId('pending-series') : undefined;
+    const optimistic = getScheduleDatesForTemplate(template, dateKey, planner.selectedMonth).map(date => ({ ...template, id: createId('pending'), version: 1, templateId, date, recurrenceId }));
+    void mutate('scheduled', 'POST', { templateId, date: dateKey, selectedMonth: planner.selectedMonth, idempotencyKey: crypto.randomUUID() }, current => optimistic.reduce(replaceScheduled, current));
     setSelectedTemplateId(null);
   }
 
-  function updateScheduledActivity(
-    activityId: string,
-    patch: Partial<ScheduledActivity>
-  ) {
-    setPlanner((current) => {
-      const allMonths = Object.fromEntries(
-        Object.entries(current.state.months).map(([monthKey, month]) => [
-          monthKey,
-          {
-            ...month,
-            scheduled: month.scheduled.filter((activity) => activity.id !== activityId)
-          }
-        ])
-      );
-      const existing = Object.values(current.state.months)
-        .flatMap((month) => month.scheduled)
-        .find((activity) => activity.id === activityId);
-
-      if (!existing) return current;
-
-      const updated = { ...existing, ...patch };
-      if (typeof patch.title === "string") {
-        if (!patch.title.trim()) return current;
-      }
-      if (!isTimeRangeValid(updated.startTime, updated.endTime)) return current;
-      const targetMonth = monthKeyFromDate(dateFromKey(updated.date));
-      const target = allMonths[targetMonth] ?? {
-        monthKey: targetMonth,
-        scheduled: []
-      };
-
-      return {
-        ...current,
-        state: ensureRollingMonths({
-          ...current.state,
-          months: {
-            ...allMonths,
-            [targetMonth]: {
-              monthKey: targetMonth,
-              scheduled: [...target.scheduled, updated].sort((a, b) =>
-                `${a.date}${a.startTime ?? ""}`.localeCompare(
-                  `${b.date}${b.startTime ?? ""}`
-                )
-              )
-            }
-          }
-        }, current.selectedMonth)
-      };
-    });
+  function updateScheduledActivity(activityId: string, patch: Partial<ScheduledActivity>) {
+    setDraft(current => current?.id === activityId ? { ...current, ...patch } : current);
   }
 
   function toggleScheduledPerson(activityId: string, personId: string) {
-    const activity = Object.values(planner.state.months)
-      .flatMap((month) => month.scheduled)
-      .find((scheduled) => scheduled.id === activityId);
-    if (!activity) return;
-    updateScheduledActivity(activityId, {
-      personIds: activity.personIds.includes(personId)
-        ? activity.personIds.filter((id) => id !== personId)
-        : [...activity.personIds, personId]
-    });
+    if (!draft || draft.id !== activityId) return;
+    updateScheduledActivity(activityId, { personIds: draft.personIds.includes(personId) ? draft.personIds.filter(id => id !== personId) : [...draft.personIds, personId] });
   }
 
   function requestScheduledActivityDelete(activityId: string) {
@@ -777,37 +274,9 @@ export default function PlannerApp() {
     deleteScheduledActivity(activityId);
   }
 
-  function deleteScheduledActivity(
-    activityId: string,
-    deleteScope: DeleteScope = "single"
-  ) {
-    setPlanner((current) => {
-      const target = findScheduledActivity(current.state, activityId);
-      if (!target) return current;
-
-      return {
-        ...current,
-        state: {
-          ...current.state,
-          months: Object.fromEntries(
-            Object.entries(current.state.months).map(([monthKey, month]) => [
-              monthKey,
-              {
-                ...month,
-                scheduled: month.scheduled.filter((activity) =>
-                  deleteScope === "future"
-                    ? !isFutureRecurringMatch(activity, target, current.state)
-                    : activity.id !== activityId
-                )
-              }
-            ])
-          )
-        }
-      };
-    });
-    if (editingActivityId === activityId) {
-      setEditingActivityId(null);
-    }
+  function deleteScheduledActivity(activityId: string, deleteScope: DeleteScope = 'single') {
+    const target = findScheduledActivity(planner.state, activityId); if (!target) return;
+    void mutate('scheduled/' + activityId, 'DELETE', { expectedVersion: target.version, scope: deleteScope, idempotencyKey: crypto.randomUUID() }, current => ({ ...current, state: { ...current.state, months: Object.fromEntries(Object.entries(current.state.months).map(([key, month]) => [key, { ...month, scheduled: month.scheduled.filter(a => deleteScope === 'future' ? !isFutureRecurringMatch(a, target, current.state) : a.id !== activityId) }])) } })).then(ok => { if (ok && editingActivityId === activityId) { setEditingActivityId(null); setDraft(null); } });
     setPendingRecurringDeleteId(null);
   }
 
@@ -863,32 +332,10 @@ export default function PlannerApp() {
   }
 
   function cloneToNextMonth() {
-    setPlanner((current) => {
-      const sourceMonth = current.selectedMonth;
-      const targetMonth = addMonths(sourceMonth, 1);
-      const sourceActivities =
-        current.state.months[sourceMonth]?.scheduled.filter((activity) =>
-          isSameMonth(dateFromKey(activity.date), sourceMonth)
-        ) ?? [];
-      const targetPlan = current.state.months[targetMonth] ?? {
-        monthKey: targetMonth,
-        scheduled: []
-      };
-      const cloned = sourceActivities.map((activity) => ({
-        ...activity,
-        id: createId("scheduled"),
-        date: remapDateByWeekPattern(activity.date, sourceMonth, targetMonth)
-      }));
-      const nextState = setMonthScheduled(current.state, targetMonth, [
-        ...targetPlan.scheduled,
-        ...cloned
-      ]);
-
-      return {
-        ...current,
-        state: ensureRollingMonths(nextState, sourceMonth)
-      };
-    });
+    const source = planner.selectedMonth, target = addMonths(source, 1);
+    if (!isNavigableMonth(target)) return;
+    const copies = (planner.state.months[source]?.scheduled ?? []).map(a => ({ ...a, id: createId('pending'), version: 1, date: remapDateByWeekPattern(a.date, source, target) }));
+    void mutate('clone', 'POST', { source, target, idempotencyKey: crypto.randomUUID() }, current => copies.reduce(replaceScheduled, current));
   }
 
   function dayLabel(date: Date) {
@@ -1059,7 +506,7 @@ export default function PlannerApp() {
         {isEditMode ? (
           <button
             className="scheduled-main"
-            onClick={() => setEditingActivityId(activity.id)}
+            onClick={() => openEditor(activity.id)}
             type="button"
           >
             {cardContent}
@@ -1072,7 +519,7 @@ export default function PlannerApp() {
             <button
               aria-label={`Edit ${activity.title}`}
               className="icon-button"
-              onClick={() => setEditingActivityId(activity.id)}
+              onClick={() => openEditor(activity.id)}
               type="button"
             >
               <Pencil aria-hidden="true" size={14} />
@@ -1216,6 +663,7 @@ export default function PlannerApp() {
     setOpenMenu(null);
     if (mode === "view") {
       setEditingActivityId(null);
+      setDraft(null);
     }
   }
 
@@ -1224,12 +672,16 @@ export default function PlannerApp() {
     window.print();
   }
 
+  if (auth !== 'member') return <main className="planner-shell"><h1>Plan by Week</h1><p role="status">{status}</p><button type="button" onClick={() => location.reload()}>Try again</button></main>;
+
   return (
-    <main className={`planner-shell ${isEditMode ? "edit-mode" : "view-mode"}`}>
+    <main inert={saving || undefined} aria-busy={saving} className={`planner-shell ${isEditMode ? "edit-mode" : "view-mode"}`}>
+      <div className="sync-status" role="status">{saving ? 'Saving…' : status}</div>
+      {notice ? <div className="sync-notice" role="alert">{notice} {canRetry ? <button type="button" onClick={() => void retry()}>Retry save</button> : null}<button type="button" onClick={() => void refresh()}>Refresh calendar</button></div> : null}
       {isEditMode ? (
         <section className="planner-hero">
           <div>
-            <p className="eyebrow">Local planner</p>
+            <p className="eyebrow">Family planner</p>
             <h1>Plan by Week</h1>
             <p className="hero-copy">
               A light weekly and monthly activity planner for people, routines,
@@ -1317,6 +769,8 @@ export default function PlannerApp() {
             </button>
             {openMenu === "settings" ? (
               <div className="toolbar-menu align-right" role="menu">
+                <button role="menuitem" type="button" onClick={() => { void api('invite').then(data => navigator.clipboard.writeText(data.url)).then(() => setNotice('Family invite link copied.')).catch(() => setNotice('Could not copy the invitation link.')); }}>Copy family invite link</button>
+                <button role="menuitem" type="button" onClick={() => { setDraft(null); void leave(); }}>Leave this calendar</button>
                 <button
                   aria-pressed={appMode === "view"}
                   onClick={() => chooseAppMode("view")}
@@ -1643,14 +1097,21 @@ export default function PlannerApp() {
                 </div>
                 <button
                   className="ghost-button"
-                  onClick={() => setEditingActivityId(null)}
+                  onClick={() => void saveDraft()}
+                  disabled={!editingActivity.title.trim() || !isTimeRangeValid(editingActivity.startTime, editingActivity.endTime)}
                   type="button"
                 >
                   Save
                 </button>
               </div>
 
+              {draftIsStale ? <div className="sync-notice" role="alert">
+                {latestActivity ? 'This activity changed on another device. Your draft has been kept.' : 'This activity was deleted or moved outside the visible range. Your draft has been kept.'}
+                <button type="button" onClick={() => { setDraft(latestActivity ? structuredClone(latestActivity) : null); if (!latestActivity) setEditingActivityId(null); setNotice(''); }}>Reload latest</button>
+                {latestActivity ? <><details><summary>Latest saved activity</summary><p>{latestActivity.title} · {latestActivity.date} · {latestActivity.startTime ?? 'Any time'}–{latestActivity.endTime ?? ''}</p><p>{latestActivity.notes}</p><p>People: {latestActivity.personIds.map(id => personById(id)?.name ?? id).join(', ') || 'None'}</p></details><button type="button" onClick={() => { setDraft(current => current ? { ...current, version: latestActivity.version } : current); setNotice('Review your draft, then choose Save to apply it to the latest version.'); }}>Review and retry</button></> : null}
+              </div> : null}
               <div className="editor-grid">
+                <label className="editor-field">Date<input aria-label="Scheduled date" type="date" value={editingActivity.date} onChange={event => updateScheduledActivity(editingActivity.id, { date: event.target.value })} /></label>
                 <label className="editor-field editor-title-field">
                   Title
                   <div className="input-with-icon">
@@ -1665,6 +1126,7 @@ export default function PlannerApp() {
                         })
                     })}
                     <input
+                      aria-label="Title"
                       value={editingActivity.title}
                       onChange={(event) =>
                         updateScheduledActivity(editingActivity.id, {
@@ -1718,6 +1180,7 @@ export default function PlannerApp() {
                 </label>
                 <fieldset className="editor-wide">
                   <legend>People</legend>
+                  {editingActivity.personIds.filter(id => !personById(id)).map(id => <label className="check-chip" key={id}><input type="checkbox" checked onChange={() => toggleScheduledPerson(editingActivity.id, id)} />Removed person — uncheck to remove this assignment</label>)}
                   <div className="person-options">
                     {planner.state.people.length === 0 ? (
                       <p className="empty-note">No people created yet.</p>

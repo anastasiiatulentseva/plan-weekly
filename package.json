@@ -7,18 +7,31 @@
     "dev": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "test": "node --test tests/*.mjs"
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "test:integration": "node --import tsx --test --test-concurrency=1 tests/integration/*.test.mjs",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
-    "@astrojs/react": "^4.2.1",
-    "astro": "^5.1.5",
+    "@astrojs/node": "^11.1.5",
+    "@astrojs/react": "^6.0.5",
+    "astro": "^7.3.1",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.468.0",
+    "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "esbuild": "^0.27.7"
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.13"
   }
 }

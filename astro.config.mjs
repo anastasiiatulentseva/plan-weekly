@@ -1,9 +1,11 @@
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
+import node from "@astrojs/node";
 
 export default defineConfig({
-  site: "https://anastasiiatulentseva.github.io",
-  ...(process.env.GITHUB_PAGES === "true" ? { base: "/plan-weekly" } : {}),
+  site: "https://plans.tulentsev.com",
   integrations: [react()],
-  output: "static"
+  output: "server",
+  session: false,
+  adapter: node({ mode: "standalone" })
 });
