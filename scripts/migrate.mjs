@@ -12,8 +12,10 @@ try {
   await connection`SELECT pg_advisory_lock(19042026)`;
   await migrate(drizzle(connection), { migrationsFolder: new URL('../drizzle/', import.meta.url).pathname });
   console.log('Migrations complete');
-} catch {
-  console.error('Database migration failed');
+} catch (error) {
+  // Do not log DATABASE_URL: it may contain production credentials. Database and
+  // network errors themselves contain the actionable PostgreSQL error/code.
+  console.error('Database migration failed', error);
   process.exitCode = 1;
 } finally {
   await connection.end({ timeout: 5 });
