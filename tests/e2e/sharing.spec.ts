@@ -50,8 +50,21 @@ test('two browsers receive person, activity creation, edits, assignments and del
     const template = first.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' });
     await expect(second.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' })).toBeVisible();
     await expect(first.locator('main')).not.toHaveAttribute('inert', '');
+    await first.evaluate(() => {
+      const events: Record<string, unknown> = {};
+      Object.assign(window, { __dragEvents: events });
+      for (const type of ['dragstart', 'dragenter', 'dragover', 'drop', 'dragend']) {
+        document.addEventListener(type, event => {
+          const drag = event as DragEvent;
+          events[type] = { target: (event.target as Element).className, effectAllowed: drag.dataTransfer?.effectAllowed,
+            dropEffect: drag.dataTransfer?.dropEffect, types: Array.from(drag.dataTransfer?.types ?? []),
+            payload: type === 'drop' ? drag.dataTransfer?.getData('application/x-plan-by-week-activity') : undefined };
+        }, true);
+      }
+    });
     const created = first.waitForResponse(response => response.url().endsWith('/api/scheduled') && response.request().method() === 'POST' && response.status() === 201);
     await template.dragTo(monthDay(first, today));
+    console.log('Drag events:', await first.evaluate(() => (window as typeof window & { __dragEvents: Record<string, unknown> }).__dragEvents));
     await created;
     await expect(second.getByRole('button', { name: 'Edit Sync Football', exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Edit Sync Football', exact: true }).click();
