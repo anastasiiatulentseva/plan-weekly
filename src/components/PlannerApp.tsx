@@ -264,9 +264,11 @@ export default function PlannerApp() {
   function allowDrop(event: {
     preventDefault: () => void;
     currentTarget: HTMLElement;
+    dataTransfer: DataTransfer;
   }) {
     if (!isEditMode) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = event.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
     event.currentTarget.classList.add("drop-ready");
   }
 
