@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const invite = 'browser-test-invite-'.repeat(4);
 const month = new Date().toISOString().slice(0, 7);
@@ -9,6 +9,11 @@ function monthDay(page: Page, dateKey: string) {
   const day = new Intl.DateTimeFormat('en-IE', { day: 'numeric' }).format(date);
   const monthLabel = new Intl.DateTimeFormat('en-IE', { month: 'short' }).format(date);
   return page.locator('.month-day').filter({ hasText: `${weekday}, ${day} ${monthLabel}` });
+}
+async function dragIntoDay(card: Locator, day: Locator) {
+  const bounds = await day.boundingBox();
+  if (!bounds) throw new Error('Target day is not visible');
+  await card.dragTo(day, { targetPosition: { x: bounds.width - 8, y: bounds.height - 8 } });
 }
 function adjacentDayInMonth(dateKey: string) {
   const date = new Date(`${dateKey}T12:00:00Z`);
@@ -50,21 +55,8 @@ test('two browsers receive person, activity creation, edits, assignments and del
     const template = first.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' });
     await expect(second.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' })).toBeVisible();
     await expect(first.locator('main')).not.toHaveAttribute('inert', '');
-    await first.evaluate(() => {
-      const events: Record<string, unknown> = {};
-      Object.assign(window, { __dragEvents: events });
-      for (const type of ['dragstart', 'dragenter', 'dragover', 'drop', 'dragend']) {
-        document.addEventListener(type, event => {
-          const drag = event as DragEvent;
-          events[type] = { target: (event.target as Element).className, effectAllowed: drag.dataTransfer?.effectAllowed,
-            dropEffect: drag.dataTransfer?.dropEffect, types: Array.from(drag.dataTransfer?.types ?? []),
-            payload: type === 'drop' ? drag.dataTransfer?.getData('application/x-plan-by-week-activity') : undefined };
-        }, true);
-      }
-    });
     const created = first.waitForResponse(response => response.url().endsWith('/api/scheduled') && response.request().method() === 'POST' && response.status() === 201);
-    await template.dragTo(monthDay(first, today));
-    console.log('Drag events:', await first.evaluate(() => (window as typeof window & { __dragEvents: Record<string, unknown> }).__dragEvents));
+    await dragIntoDay(template, monthDay(first, today));
     await created;
     await expect(second.getByRole('button', { name: 'Edit Sync Football', exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Edit Sync Football', exact: true }).click();
@@ -95,7 +87,7 @@ test('editing a reusable card leaves placed copies unchanged, and dragging moves
   await expect(scheduled).toBeVisible();
   const destination = adjacentDayInMonth(today);
   const moved = page.waitForResponse(response => response.url().includes('/api/scheduled/') && response.request().method() === 'PATCH' && response.status() === 200);
-  await scheduled.dragTo(monthDay(page, destination));
+  await dragIntoDay(scheduled, monthDay(page, destination));
   await moved;
   await expect(monthDay(page, destination).locator('.scheduled-card').filter({ hasText: 'Reusable Original' })).toBeVisible();
   const monthEnd = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
