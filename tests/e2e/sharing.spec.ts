@@ -49,7 +49,10 @@ test('two browsers receive person, activity creation, edits, assignments and del
     await first.getByRole('button', { name: 'Add activity', exact: true }).click();
     const template = first.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' });
     await expect(second.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' })).toBeVisible();
+    await expect(first.locator('main')).not.toHaveAttribute('inert', '');
+    const created = first.waitForResponse(response => response.url().endsWith('/api/scheduled') && response.request().method() === 'POST' && response.status() === 201);
     await template.dragTo(monthDay(first, today));
+    await created;
     await expect(second.getByRole('button', { name: 'Edit Sync Football', exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Edit Sync Football', exact: true }).click();
     const editor = first.getByRole('dialog', { name: 'Edit activity' });
@@ -78,7 +81,9 @@ test('editing a reusable card leaves placed copies unchanged, and dragging moves
   const scheduled = page.locator('.scheduled-card').filter({ hasText: 'Reusable Original' });
   await expect(scheduled).toBeVisible();
   const destination = adjacentDayInMonth(today);
+  const moved = page.waitForResponse(response => response.url().includes('/api/scheduled/') && response.request().method() === 'PATCH' && response.status() === 200);
   await scheduled.dragTo(monthDay(page, destination));
+  await moved;
   await expect(monthDay(page, destination).locator('.scheduled-card').filter({ hasText: 'Reusable Original' })).toBeVisible();
   const monthEnd = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const result = await api(page, `planner?from=${month}-01&to=${month}-${monthEnd}`);
