@@ -16,6 +16,7 @@ const fields = {
 const validTimes = (v: { startTime?: string | null; endTime?: string | null }) => !v.startTime || !v.endTime || v.startTime <= v.endTime;
 export const templateInput = z.object({ ...fields, idempotencyKey: z.string().uuid().optional() }).strict().refine(validTimes, 'Invalid time range');
 export const versionInput = z.number().int().positive().max(2147483647);
+export const templateUpdateInput = z.object({ ...fields, expectedVersion: versionInput }).strict().refine(validTimes, 'Invalid time range');
 export const deleteInput = z.object({ expectedVersion: versionInput }).strict();
 export const scheduleInput = z.object({ templateId: id, date: dateKey, selectedMonth: monthKey, idempotencyKey: z.string().uuid() }).strict().refine(v => v.date.startsWith(v.selectedMonth), 'Date must be in selected month');
 export const updateInput = z.object({ ...fields, date: dateKey, expectedVersion: versionInput }).strict().refine(validTimes, 'Invalid time range');

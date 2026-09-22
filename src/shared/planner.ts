@@ -2,7 +2,7 @@ export type ViewMode = "week" | "month";
 export type PrintMode = "week" | "month";
 export type AppMode = "view" | "edit";
 export type OpenMenu = "settings" | null;
-export type IconMenu = "person" | "activity" | "editor" | null;
+export type IconMenu = "person" | "activity" | "editor" | "template" | null;
 export type DeleteScope = "single" | "future";
 
 export type Person = {
@@ -289,4 +289,3 @@ export function isFutureRecurringMatch(
     dateFromKey(candidate.date).getDay() === dateFromKey(target.date).getDay()
   );
 }
-

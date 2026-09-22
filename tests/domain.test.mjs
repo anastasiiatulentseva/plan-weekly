@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isTimeRangeValid, isFutureRecurringMatch, remapDateByWeekPattern } from '../src/shared/planner.ts';
 import { extractPreferences } from '../src/shared/preferences.ts';
-import { dateKey, rangeInput, templateInput, updateInput } from '../src/server/validation.ts';
+import { dateKey, rangeInput, templateInput, templateUpdateInput, updateInput } from '../src/server/validation.ts';
 import { authenticated, signSession, sessionCookie, cookieName } from '../src/server/security.ts';
 
 test('time ranges allow missing endpoints and equality, reject reversed times', () => {
@@ -13,6 +13,8 @@ test('time ranges allow missing endpoints and equality, reject reversed times', 
   const base = { title: 'Sport', color: '#abcdef', personIds: [] };
   assert.equal(templateInput.safeParse({ ...base, startTime: '25:00' }).success, false);
   assert.equal(templateInput.safeParse({ ...base, startTime: '10:00', endTime: '09:00' }).success, false);
+  assert.equal(templateUpdateInput.safeParse({ ...base, expectedVersion: 1, startTime: '10:00', endTime: '09:00' }).success, false);
+  assert.equal(templateUpdateInput.safeParse({ ...base, expectedVersion: 1, startTime: '09:00', endTime: '10:00' }).success, true);
   assert.equal(updateInput.safeParse({ ...base, date: '2026-09-10' }).success, false);
 });
 test('dates, ranges, duplicate assignments and unsafe colors are validated', () => {

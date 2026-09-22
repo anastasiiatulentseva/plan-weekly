@@ -70,6 +70,7 @@ export async function command(kind: Kind | 'clone', method: string, recordId: st
   const input = kind === 'clone' ? validation.cloneInput.parse(raw)
     : method === 'POST' ? (kind === 'people' ? validation.personInput.parse(raw) : kind === 'templates' ? validation.templateInput.parse(raw) : validation.scheduleInput.parse(raw))
     : method === 'PATCH' && kind === 'scheduled' ? validation.updateInput.parse(raw)
+    : method === 'PATCH' && kind === 'templates' ? validation.templateUpdateInput.parse(raw)
     : method === 'DELETE' ? (kind === 'scheduled' ? validation.scheduledDeleteInput.parse(raw) : validation.deleteInput.parse(raw))
     : (() => { throw new ApiError(405, 'METHOD_NOT_ALLOWED'); })();
   if (method !== 'POST' && !recordId) throw new ApiError(400, 'ID_REQUIRED');
@@ -122,7 +123,13 @@ export async function command(kind: Kind | 'clone', method: string, recordId: st
       records = await aggregates(tx, 'scheduled', ids);
     } else if (kind !== 'clone' && recordId && 'expectedVersion' in input) {
       await checkVersion(tx, kind, recordId, input.expectedVersion);
-      if (method === 'PATCH' && kind === 'scheduled' && 'personIds' in input && 'date' in input) {
+      if (method === 'PATCH' && kind === 'templates' && 'personIds' in input && !('date' in input)) {
+        const update = validation.templateUpdateInput.parse(input);
+        await tx.update(templates).set({ ...activityValues(update), version: sql`${templates.version} + 1` })
+          .where(and(eq(templates.id, recordId), eq(templates.version, input.expectedVersion)));
+        await assignments(tx, 'templates', recordId, update.personIds);
+        records = await aggregates(tx, 'templates', [recordId]);
+      } else if (method === 'PATCH' && kind === 'scheduled' && 'personIds' in input && 'date' in input) {
         const update = validation.updateInput.parse(input);
         await tx.update(scheduled).set({ ...activityValues(update), date: update.date, version: sql`${scheduled.version} + 1` })
           .where(and(eq(scheduled.id, recordId), eq(scheduled.version, input.expectedVersion)));

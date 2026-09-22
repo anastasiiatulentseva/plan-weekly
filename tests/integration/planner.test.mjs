@@ -65,6 +65,22 @@ test('failed assignment changes roll back aggregate, joins and revision', async 
   await assert.rejects(command('scheduled', 'PATCH', a.id, updateInput(a, { title: 'Must roll back', personIds: ['missing'] })), { code: 'INVALID_ASSIGNMENTS' });
   assert.deepEqual(await readPlanner('2026-09-01', '2026-09-30'), before);
 });
+test('template edits update future placements without changing scheduled copies', async () => {
+  const p = await person();
+  const t = await template({ title: 'Original', startTime: '08:00' });
+  const [existing] = (await schedule(t.id)).records;
+  const changed = await command('templates', 'PATCH', t.id, updateInput(t, {
+    title: 'Updated', color: '#10b981', personIds: [p.id], startTime: '09:00', endTime: '10:00'
+  }));
+  assert.equal(changed.records[0].version, 2);
+  assert.deepEqual(changed.records[0].personIds, [p.id]);
+  const saved = await readPlanner('2026-09-01', '2026-09-30');
+  assert.equal(saved.activityTemplates[0].title, 'Updated');
+  assert.equal(saved.scheduled[0].id, existing.id);
+  assert.equal(saved.scheduled[0].title, 'Original');
+  assert.equal(saved.scheduled[0].startTime, '08:00');
+  await assert.rejects(command('templates', 'PATCH', t.id, updateInput(t, { title: 'Stale' })), { status: 409 });
+});
 test('one of two writes at the same version conflicts; unrelated writes both succeed', async () => {
   const t = await template(); const [a] = (await schedule(t.id)).records;
   const results = await Promise.allSettled(['First', 'Second'].map(title => command('scheduled', 'PATCH', a.id, updateInput(a, { title }))));
