@@ -1445,24 +1445,24 @@ export default function PlannerApp() {
           </button>
         </div>
 
-        <div className="segmented-control" aria-label="Calendar view">
-          <button
-            aria-pressed={planner.viewMode === "week"}
-            onClick={() => setViewMode("week")}
-            type="button"
-          >
-            Week
-          </button>
-          <button
-            aria-pressed={planner.viewMode === "month"}
-            onClick={() => setViewMode("month")}
-            type="button"
-          >
-            Month
-          </button>
-        </div>
-
         <div className="toolbar-actions">
+          <div className="segmented-control" aria-label="Calendar view">
+            <button
+              aria-pressed={planner.viewMode === "week"}
+              onClick={() => setViewMode("week")}
+              type="button"
+            >
+              Week
+            </button>
+            <button
+              aria-pressed={planner.viewMode === "month"}
+              onClick={() => setViewMode("month")}
+              type="button"
+            >
+              Month
+            </button>
+          </div>
+
           {!isEditMode ? (
             <div className="menu-cluster">
               <button

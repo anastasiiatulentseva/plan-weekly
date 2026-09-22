@@ -225,7 +225,8 @@ h2 {
 
 .segmented-control {
   display: grid;
-  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  width: max-content;
+  grid-template-columns: repeat(2, 72px);
   padding: 4px;
   border: 1px solid #d8dee9;
   border-radius: 8px;
@@ -557,6 +558,15 @@ h2 {
 
 .view-mode .scheduled-card {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.view-mode .scheduled-main .activity-heading {
+  display: block;
+}
+
+.view-mode .scheduled-main .activity-heading .emoji-mark {
+  margin-right: 4px;
+  vertical-align: middle;
 }
 
 .scheduled-main {
@@ -1280,26 +1290,28 @@ fieldset {
 
 @media (max-width: 1050px) {
   .planner-toolbar {
-    align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
   }
 
   .month-nav {
+    grid-column: 1 / -1;
     justify-content: space-between;
   }
 
   .toolbar-actions {
-    flex-wrap: wrap;
-    justify-content: stretch;
+    grid-column: 1;
+    justify-content: flex-end;
   }
 
   .toolbar-actions .menu-cluster,
   .toolbar-actions .icon-menu-button {
-    flex: 1;
+    flex: 0 0 auto;
   }
 
   .toolbar-actions .icon-menu-button {
-    width: 100%;
+    width: 38px;
   }
 
   .planner-workspace {
@@ -1311,9 +1323,58 @@ fieldset {
   }
 }
 
+@media (min-width: 721px) and (max-width: 1050px) {
+  .planner-toolbar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .month-nav {
+    grid-column: 1;
+  }
+
+  .toolbar-actions {
+    grid-column: 2;
+  }
+
+  .week-grid,
+  .view-mode .week-grid {
+    grid-template-columns: repeat(7, minmax(144px, 1fr));
+  }
+
+  .month-grid {
+    grid-template-columns: repeat(7, minmax(112px, 1fr));
+  }
+
+  .week-grid,
+  .month-grid {
+    overscroll-behavior-x: contain;
+    padding-bottom: 8px;
+    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+
+  .week-grid .day-cell,
+  .month-grid .day-cell {
+    scroll-snap-align: start;
+  }
+
+  .view-mode .day-cell {
+    min-height: 320px;
+  }
+
+  .view-mode .calendar-surface {
+    min-height: 0;
+  }
+
+  .view-mode .month-day {
+    min-height: 150px;
+  }
+}
+
 @media (max-width: 720px) {
   .planner-shell {
-    padding: 18px;
+    padding: 14px;
   }
 
   .modal-backdrop {
@@ -1335,9 +1396,39 @@ fieldset {
     min-width: 0;
   }
 
+  .month-nav {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+  }
+
+  .calendar-surface,
+  .view-mode .calendar-surface {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .calendar-view-header {
+    flex-wrap: wrap;
+  }
+
+  .week-heading {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .week-nav {
+    margin-left: auto;
+  }
+
   .week-grid,
+  .view-mode .week-grid,
   .month-grid {
-    grid-template-columns: repeat(7, minmax(72px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+
+  .month-grid .weekday-heading,
+  .month-grid .outside-month {
+    display: none;
   }
 
   .editor-grid {
@@ -1370,12 +1461,11 @@ fieldset {
     width: 100%;
   }
 
-  .day-cell {
-    min-height: 210px;
-  }
-
-  .month-day {
-    min-height: 110px;
+  .day-cell,
+  .view-mode .day-cell,
+  .month-day,
+  .view-mode .month-day {
+    min-height: 0;
   }
 }
 
