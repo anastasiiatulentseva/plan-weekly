@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
@@ -45,6 +46,7 @@ jobs:
           path: test-results/
   publish:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
