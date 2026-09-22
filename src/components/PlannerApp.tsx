@@ -10,7 +10,8 @@ import {
   Printer,
   Settings,
   Trash2,
-  Wrench
+  Wrench,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -74,10 +75,23 @@ const activityIconGallery = [
   "⛸️",
   "🛼"
 ];
+const activityDragType = 'application/x-plan-by-week-activity';
+type ActivityDragPayload = { kind: 'template' | 'scheduled'; id: string };
+function parseActivityDragPayload(value: string): ActivityDragPayload | null {
+  try {
+    const payload: unknown = JSON.parse(value);
+    if (payload && typeof payload === 'object' && 'kind' in payload && 'id' in payload &&
+      (payload.kind === 'template' || payload.kind === 'scheduled') && typeof payload.id === 'string') {
+      return { kind: payload.kind, id: payload.id };
+    }
+  } catch { /* Ignore unrelated drags. */ }
+  return null;
+}
 
 export default function PlannerApp() {
   const { planner, setPlanner, auth, status, notice, setNotice, saving, mutate, refresh, leave, retry, canRetry, conflictLatest } = usePlanner();
   const [draft, setDraft] = useState<ScheduledActivity | null>(null);
+  const [templateDraft, setTemplateDraft] = useState<ActivityTemplate | null>(null);
   const [personName, setPersonName] = useState("");
   const [personIcon, setPersonIcon] = useState(personIconGallery[0]);
   const [activityTitle, setActivityTitle] = useState("");
@@ -93,7 +107,6 @@ export default function PlannerApp() {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [openIconMenu, setOpenIconMenu] = useState<IconMenu>(null);
   const [pendingRecurringDeleteId, setPendingRecurringDeleteId] = useState<string | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const isEditMode = appMode === "edit";
 
   const currentMonth = useMemo(() => monthKeyFromDate(new Date()), []);
@@ -125,26 +138,48 @@ export default function PlannerApp() {
   const canGoNextMonth = isNavigableMonth(addMonths(planner.selectedMonth, 1), currentMonth);
   const canGoPreviousWeek = selectedWeekIndex > 0;
   const canGoNextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < monthWeeks.length - 1;
-  const selectedTemplate = useMemo(() => {
-    if (!selectedTemplateId) return null;
-    return (
-      planner.state.activityTemplates.find((activity) => activity.id === selectedTemplateId) ??
-      null
-    );
-  }, [planner.state.activityTemplates, selectedTemplateId]);
+  const canSaveTemplate = Boolean(templateDraft?.title.trim() && isTimeRangeValid(templateDraft.startTime, templateDraft.endTime));
+  const latestTemplate = templateDraft ? planner.state.activityTemplates.find(activity => activity.id === templateDraft.id) : null;
+  const templateDraftIsStale = Boolean(templateDraft && (!latestTemplate || latestTemplate.version !== templateDraft.version));
   const editingActivity = draft;
   const visibleActivity = editingActivityId ? findScheduledActivity(planner.state, editingActivityId) : null;
   const latestActivity = conflictLatest?.id === editingActivityId && (!visibleActivity || conflictLatest.version > visibleActivity.version) ? conflictLatest : visibleActivity;
   const draftIsStale = Boolean(draft && (!latestActivity || draft.version !== latestActivity.version));
   function openEditor(id: string) {
     const activity = findScheduledActivity(planner.state, id);
-    if (activity) { setDraft(structuredClone(activity)); setEditingActivityId(id); setNotice(''); }
+    if (activity) { setTemplateDraft(null); setDraft(structuredClone(activity)); setEditingActivityId(id); setOpenIconMenu(null); setNotice(''); }
   }
   async function saveDraft() {
     if (!draft) return;
     const { id, version, templateId, recurrenceId, ...fields } = draft;
     const ok = await mutate('scheduled/' + id, 'PATCH', { ...fields, expectedVersion: version }, current => replaceScheduled(current, { ...draft, version: version + 1 }));
-    if (ok) { setDraft(null); setEditingActivityId(null); }
+    if (ok) { setDraft(null); setEditingActivityId(null); setOpenIconMenu(null); }
+  }
+  function openTemplateEditor(activity: ActivityTemplate) {
+    setDraft(null);
+    setEditingActivityId(null);
+    setTemplateDraft(structuredClone(activity));
+    setOpenIconMenu(null);
+    setNotice('');
+  }
+  function updateTemplateDraft(patch: Partial<ActivityTemplate>) {
+    setTemplateDraft(current => current ? { ...current, ...patch } : current);
+  }
+  function toggleTemplatePerson(personId: string) {
+    setTemplateDraft(current => current ? {
+      ...current,
+      personIds: current.personIds.includes(personId)
+        ? current.personIds.filter(id => id !== personId)
+        : [...current.personIds, personId]
+    } : current);
+  }
+  async function saveTemplateDraft() {
+    if (!templateDraft || !canSaveTemplate) return;
+    const { id, version, ...fields } = templateDraft;
+    const updated = { ...templateDraft, title: templateDraft.title.trim(), notes: templateDraft.notes?.trim() || undefined, version: version + 1 };
+    const ok = await mutate('templates/' + id, 'PATCH', { ...fields, title: updated.title, notes: updated.notes, expectedVersion: version },
+      current => ({ ...current, state: { ...current.state, activityTemplates: current.state.activityTemplates.map(template => template.id === id ? updated : template) } }));
+    if (ok) { setTemplateDraft(null); setOpenIconMenu(null); }
   }
   function replaceScheduled(current: PersistedPlanner, activity: ScheduledActivity) {
     const months = Object.fromEntries(Object.entries(current.state.months).map(([key, month]) => [key, { ...month, scheduled: month.scheduled.filter(a => a.id !== activity.id) }]));
@@ -204,7 +239,7 @@ export default function PlannerApp() {
   function deleteActivityTemplate(activityId: string) {
     const template = planner.state.activityTemplates.find(a => a.id === activityId); if (!template) return;
     void mutate('templates/' + activityId, 'DELETE', { expectedVersion: template.version }, current => ({ ...current, state: { ...current.state, activityTemplates: current.state.activityTemplates.filter(a => a.id !== activityId) } }));
-    setSelectedTemplateId(null);
+    if (templateDraft?.id === activityId) setTemplateDraft(null);
   }
 
   function beginActivityDrag(
@@ -213,7 +248,17 @@ export default function PlannerApp() {
   ) {
     if (!isEditMode) return;
     event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("text/plain", activityId);
+    const payload = JSON.stringify({ kind: 'template', id: activityId } satisfies ActivityDragPayload);
+    event.dataTransfer.setData(activityDragType, payload);
+    event.dataTransfer.setData("text/plain", payload);
+  }
+
+  function beginScheduledActivityDrag(event: { dataTransfer: DataTransfer }, activityId: string) {
+    if (!isEditMode) return;
+    event.dataTransfer.effectAllowed = 'move';
+    const payload = JSON.stringify({ kind: 'scheduled', id: activityId } satisfies ActivityDragPayload);
+    event.dataTransfer.setData(activityDragType, payload);
+    event.dataTransfer.setData('text/plain', payload);
   }
 
   function allowDrop(event: {
@@ -240,8 +285,9 @@ export default function PlannerApp() {
     event.preventDefault();
     event.currentTarget.classList.remove("drop-ready");
 
-    const templateId = event.dataTransfer.getData("text/plain");
-    scheduleTemplateOnDate(templateId, dateKey);
+    const payload = parseActivityDragPayload(event.dataTransfer.getData(activityDragType));
+    if (payload?.kind === 'template') scheduleTemplateOnDate(payload.id, dateKey);
+    if (payload?.kind === 'scheduled') moveScheduledActivityToDate(payload.id, dateKey);
   }
 
   function scheduleTemplateOnDate(templateId: string, dateKey: string) {
@@ -250,7 +296,15 @@ export default function PlannerApp() {
     const recurrenceId = template.isRecurring ? createId('pending-series') : undefined;
     const optimistic = getScheduleDatesForTemplate(template, dateKey, planner.selectedMonth).map(date => ({ ...template, id: createId('pending'), version: 1, templateId, date, recurrenceId }));
     void mutate('scheduled', 'POST', { templateId, date: dateKey, selectedMonth: planner.selectedMonth, idempotencyKey: crypto.randomUUID() }, current => optimistic.reduce(replaceScheduled, current));
-    setSelectedTemplateId(null);
+  }
+
+  function moveScheduledActivityToDate(activityId: string, dateKey: string) {
+    if (!isEditMode || !isSameMonth(dateFromKey(dateKey), planner.selectedMonth)) return;
+    const activity = findScheduledActivity(planner.state, activityId);
+    if (!activity || activity.date === dateKey) return;
+    const { id, version, templateId, recurrenceId, ...fields } = activity;
+    void mutate('scheduled/' + id, 'PATCH', { ...fields, date: dateKey, expectedVersion: version },
+      current => replaceScheduled(current, { ...activity, date: dateKey, version: version + 1 }));
   }
 
   function updateScheduledActivity(activityId: string, patch: Partial<ScheduledActivity>) {
@@ -500,7 +554,9 @@ export default function PlannerApp() {
     return (
       <article
         className="scheduled-card"
+        draggable={isEditMode}
         key={activity.id}
+        onDragStart={(event) => beginScheduledActivityDrag(event, activity.id)}
         style={{ borderLeftColor: activity.color }}
       >
         {isEditMode ? (
@@ -515,22 +571,22 @@ export default function PlannerApp() {
           <div className="scheduled-main">{cardContent}</div>
         )}
         {isEditMode ? (
-          <div className="scheduled-actions">
+          <div className="tile-actions">
             <button
               aria-label={`Edit ${activity.title}`}
-              className="icon-button"
+              className="tile-action tile-action-edit"
               onClick={() => openEditor(activity.id)}
               type="button"
             >
-              <Pencil aria-hidden="true" size={14} />
+              <Pencil aria-hidden="true" size={13} />
             </button>
             <button
               aria-label={`Delete ${activity.title}`}
-              className="icon-button"
+              className="tile-action tile-action-delete"
               onClick={() => requestScheduledActivityDelete(activity.id)}
               type="button"
             >
-              <Trash2 aria-hidden="true" size={14} />
+              <Trash2 aria-hidden="true" size={13} />
             </button>
           </div>
         ) : null}
@@ -540,27 +596,16 @@ export default function PlannerApp() {
 
   function renderActivityTemplate(activity: ActivityTemplate) {
     const timeLabel = activityTimeLabel(activity);
-    const isSelected = selectedTemplateId === activity.id;
 
     return (
       <article
-        className={isSelected ? "activity-card selected-template" : "activity-card"}
+        className="activity-card"
         draggable={isEditMode}
         key={activity.id}
         onDragStart={(event) => beginActivityDrag(event, activity.id)}
         style={{ borderLeftColor: activity.color }}
       >
-        <button
-          aria-label={`${isSelected ? "Deselect" : "Select"} ${activity.title} for scheduling`}
-          aria-pressed={isSelected}
-          className="activity-card-main"
-          onClick={() =>
-            setSelectedTemplateId((current) =>
-              current === activity.id ? null : activity.id
-            )
-          }
-          type="button"
-        >
+        <div className="activity-card-main">
           <h3 className="activity-heading">
             {activity.icon ? (
               <span aria-hidden="true" className="emoji-mark">
@@ -594,15 +639,25 @@ export default function PlannerApp() {
             {timeLabel ? <span className="muted-label">{timeLabel}</span> : null}
           </div>
           {activity.notes ? <p>{activity.notes}</p> : null}
-        </button>
-        <button
-          aria-label={`Delete ${activity.title}`}
-          className="icon-button"
-          onClick={() => deleteActivityTemplate(activity.id)}
-          type="button"
-        >
-          <Trash2 aria-hidden="true" size={16} />
-        </button>
+        </div>
+        <div className="tile-actions">
+          <button
+            aria-label={`Edit reusable ${activity.title}`}
+            className="tile-action tile-action-edit"
+            onClick={() => openTemplateEditor(activity)}
+            type="button"
+          >
+            <Pencil aria-hidden="true" size={13} />
+          </button>
+          <button
+            aria-label={`Delete ${activity.title}`}
+            className="tile-action tile-action-delete"
+            onClick={() => deleteActivityTemplate(activity.id)}
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={13} />
+          </button>
+        </div>
       </article>
     );
   }
@@ -664,6 +719,7 @@ export default function PlannerApp() {
     if (mode === "view") {
       setEditingActivityId(null);
       setDraft(null);
+      setTemplateDraft(null);
     }
   }
 
@@ -721,24 +777,24 @@ export default function PlannerApp() {
           </button>
         </div>
 
-        <div className="segmented-control" aria-label="Calendar view">
-          <button
-            aria-pressed={planner.viewMode === "week"}
-            onClick={() => setViewMode("week")}
-            type="button"
-          >
-            Week
-          </button>
-          <button
-            aria-pressed={planner.viewMode === "month"}
-            onClick={() => setViewMode("month")}
-            type="button"
-          >
-            Month
-          </button>
-        </div>
-
         <div className="toolbar-actions">
+          <div className="segmented-control" aria-label="Calendar view">
+            <button
+              aria-pressed={planner.viewMode === "week"}
+              onClick={() => setViewMode("week")}
+              type="button"
+            >
+              Week
+            </button>
+            <button
+              aria-pressed={planner.viewMode === "month"}
+              onClick={() => setViewMode("month")}
+              type="button"
+            >
+              Month
+            </button>
+          </div>
+
           {!isEditMode ? (
             <div className="menu-cluster">
               <button
@@ -918,9 +974,6 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
-                  const canScheduleSelectedTemplate = Boolean(
-                    isEditMode && isInSelectedMonth && selectedTemplate
-                  );
                   const className = [
                     "day-cell",
                     isWeekend(date) ? "weekend-day" : "",
@@ -943,21 +996,6 @@ export default function PlannerApp() {
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
-                        {canScheduleSelectedTemplate ? (
-                          <button
-                            aria-label={`Schedule ${selectedTemplate?.title} on ${dayLabel(
-                              date
-                            )}`}
-                            className="day-schedule-button"
-                            onClick={() =>
-                              selectedTemplateId &&
-                              scheduleTemplateOnDate(selectedTemplateId, dateKey)
-                            }
-                            type="button"
-                          >
-                            <Plus aria-hidden="true" size={14} />
-                          </button>
-                        ) : null}
                       </header>
                       <div className="scheduled-list">
                         {activities.map(renderScheduledActivity)}
@@ -990,9 +1028,6 @@ export default function PlannerApp() {
                   const dateKey = toDateKey(date);
                   const activities = activitiesForDate(dateKey);
                   const isInSelectedMonth = isSameMonth(date, planner.selectedMonth);
-                  const canScheduleSelectedTemplate = Boolean(
-                    isEditMode && isInSelectedMonth && selectedTemplate
-                  );
                   const className = [
                     "month-day",
                     "day-cell",
@@ -1016,21 +1051,6 @@ export default function PlannerApp() {
                     >
                       <header>
                         <span>{dayLabel(date)}</span>
-                        {canScheduleSelectedTemplate ? (
-                          <button
-                            aria-label={`Schedule ${selectedTemplate?.title} on ${dayLabel(
-                              date
-                            )}`}
-                            className="day-schedule-button"
-                            onClick={() =>
-                              selectedTemplateId &&
-                              scheduleTemplateOnDate(selectedTemplateId, dateKey)
-                            }
-                            type="button"
-                          >
-                            <Plus aria-hidden="true" size={14} />
-                          </button>
-                        ) : null}
                       </header>
                       <div className="scheduled-list">
                         {activities.map(renderScheduledActivity)}
@@ -1089,19 +1109,20 @@ export default function PlannerApp() {
           ) : null}
 
           {isEditMode && editingActivity ? (
-            <section className="editor-panel" aria-label="Edit scheduled activity">
-              <div className="panel-heading">
+            <div className="modal-backdrop">
+            <section className="editor-modal" aria-label="Edit activity" aria-modal="true" role="dialog">
+              <div className="panel-heading editor-modal-heading">
                 <div>
                   <p className="panel-kicker">Scheduled copy</p>
                   <h2>Edit activity</h2>
                 </div>
                 <button
-                  className="ghost-button"
-                  onClick={() => void saveDraft()}
-                  disabled={!editingActivity.title.trim() || !isTimeRangeValid(editingActivity.startTime, editingActivity.endTime)}
+                  aria-label="Close activity editor"
+                  className="modal-close-button"
+                  onClick={() => { setDraft(null); setEditingActivityId(null); setOpenIconMenu(null); }}
                   type="button"
                 >
-                  Save
+                  <X aria-hidden="true" size={18} />
                 </button>
               </div>
 
@@ -1112,8 +1133,8 @@ export default function PlannerApp() {
               </div> : null}
               <div className="editor-grid">
                 <label className="editor-field">Date<input aria-label="Scheduled date" type="date" value={editingActivity.date} onChange={event => updateScheduledActivity(editingActivity.id, { date: event.target.value })} /></label>
-                <label className="editor-field editor-title-field">
-                  Title
+                <div className="editor-field editor-title-field">
+                  <label htmlFor="scheduled-activity-title">Title</label>
                   <div className="input-with-icon">
                     {renderIconPicker({
                       id: "editor",
@@ -1127,6 +1148,7 @@ export default function PlannerApp() {
                     })}
                     <input
                       aria-label="Title"
+                      id="scheduled-activity-title"
                       value={editingActivity.title}
                       onChange={(event) =>
                         updateScheduledActivity(editingActivity.id, {
@@ -1135,7 +1157,7 @@ export default function PlannerApp() {
                       }
                     />
                   </div>
-                </label>
+                </div>
                 <div className="time-entry editor-time-entry">
                   <label className="time-field">
                     <span>From</span>
@@ -1205,8 +1227,25 @@ export default function PlannerApp() {
                     )}
                   </div>
                 </fieldset>
+                <fieldset className="editor-wide">
+                  <legend>Activity color</legend>
+                  <div className="swatch-row">
+                    {activityPalette.map(color => (
+                      <button aria-label={`Use color ${color}`} aria-pressed={editingActivity.color === color}
+                        className={editingActivity.color === color ? "swatch selected" : "swatch"} key={color}
+                        onClick={() => updateScheduledActivity(editingActivity.id, { color })}
+                        style={{ backgroundColor: color }} type="button" />
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+              <div className="editor-modal-actions">
+                <button className="secondary-action" onClick={() => { setDraft(null); setEditingActivityId(null); setOpenIconMenu(null); }} type="button">Cancel</button>
+                <button className="primary-action" disabled={!editingActivity.title.trim() || !isTimeRangeValid(editingActivity.startTime, editingActivity.endTime) || draftIsStale}
+                  onClick={() => void saveDraft()} type="button">Save changes</button>
               </div>
             </section>
+            </div>
           ) : null}
         </section>
 
@@ -1333,6 +1372,84 @@ export default function PlannerApp() {
         </aside>
         ) : null}
       </section>
+      {isEditMode && templateDraft ? (
+        <div className="modal-backdrop">
+          <section aria-label="Edit reusable activity" aria-modal="true" className="editor-modal" role="dialog">
+            <div className="panel-heading editor-modal-heading">
+              <div>
+                <p className="panel-kicker">Ready to drag</p>
+                <h2>Edit reusable activity</h2>
+              </div>
+              <button aria-label="Close reusable activity editor" className="modal-close-button" onClick={() => setTemplateDraft(null)} type="button">
+                <X aria-hidden="true" size={18} />
+              </button>
+            </div>
+            <p className="editor-help">Changes apply to future placements. Already scheduled cards keep their details.</p>
+            {templateDraftIsStale ? (
+              <div className="sync-notice" role="alert">
+                This reusable activity changed on another device.
+                <button type="button" onClick={() => setTemplateDraft(latestTemplate ? structuredClone(latestTemplate) : null)}>Reload latest</button>
+              </div>
+            ) : null}
+            <div className="editor-grid">
+              <div className="editor-field editor-title-field">
+                <label htmlFor="template-activity-title">Title</label>
+                <div className="input-with-icon">
+                  {renderIconPicker({ id: "template", label: "Reusable activity icon", value: templateDraft.icon ?? activityIconGallery[0], icons: activityIconGallery,
+                    onChange: icon => updateTemplateDraft({ icon }) })}
+                  <input aria-label="Reusable activity title" id="template-activity-title" value={templateDraft.title} onChange={event => updateTemplateDraft({ title: event.target.value })} />
+                </div>
+              </div>
+              <div className="time-entry editor-time-entry">
+                <label className="time-field">
+                  <span>From</span>
+                  <input aria-label="Reusable activity start time" type="time" value={templateDraft.startTime ?? ""}
+                    onChange={event => updateTemplateDraft({ startTime: event.target.value || undefined })} />
+                </label>
+                <label className="time-field">
+                  <span>To</span>
+                  <input aria-label="Reusable activity end time" type="time" value={templateDraft.endTime ?? ""}
+                    onChange={event => updateTemplateDraft({ endTime: event.target.value || undefined })} />
+                </label>
+              </div>
+              <label className="check-chip full-width-check editor-wide">
+                <input type="checkbox" checked={Boolean(templateDraft.isRecurring)}
+                  onChange={event => updateTemplateDraft({ isRecurring: event.target.checked })} />
+                Recurring on same weekday
+              </label>
+              <label className="editor-field editor-wide">
+                Notes
+                <textarea rows={3} value={templateDraft.notes ?? ""} onChange={event => updateTemplateDraft({ notes: event.target.value || undefined })} />
+              </label>
+              <fieldset className="editor-wide">
+                <legend>People</legend>
+                <div className="person-options">
+                  {planner.state.people.map(person => (
+                    <label className="check-chip" key={person.id}>
+                      <input type="checkbox" checked={templateDraft.personIds.includes(person.id)} onChange={() => toggleTemplatePerson(person.id)} />
+                      {person.icon ? <span aria-hidden="true" className="emoji-mark">{person.icon}</span> : null}
+                      {person.name}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="editor-wide">
+                <legend>Activity color</legend>
+                <div className="swatch-row">
+                  {activityPalette.map(color => (
+                    <button aria-label={`Use color ${color}`} aria-pressed={templateDraft.color === color} className={templateDraft.color === color ? "swatch selected" : "swatch"}
+                      key={color} onClick={() => updateTemplateDraft({ color })} style={{ backgroundColor: color }} type="button" />
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+            <div className="editor-modal-actions">
+              <button className="secondary-action" onClick={() => setTemplateDraft(null)} type="button">Cancel</button>
+              <button className="primary-action" disabled={!canSaveTemplate || templateDraftIsStale} onClick={() => void saveTemplateDraft()} type="button">Save changes</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {renderPrintSheet("week")}
       {renderPrintSheet("month")}
     </main>

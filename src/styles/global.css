@@ -225,7 +225,8 @@ h2 {
 
 .segmented-control {
   display: grid;
-  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  width: max-content;
+  grid-template-columns: repeat(2, 72px);
   padding: 4px;
   border: 1px solid #d8dee9;
   border-radius: 8px;
@@ -476,25 +477,6 @@ h2 {
   box-shadow: inset 0 0 0 2px rgba(96, 165, 250, 0.18);
 }
 
-.day-schedule-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  border: 1px solid #bfdbfe;
-  border-radius: 7px;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.day-schedule-button:hover,
-.day-schedule-button:focus-visible {
-  border-color: #60a5fa;
-  background: #dbeafe;
-}
-
 .day-cell.weekend-day {
   background: #f6f9fd;
 }
@@ -556,7 +538,7 @@ h2 {
 .scheduled-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
+  gap: 2px;
   padding: 8px;
   border: 1px solid #e5e7eb;
   border-left: 4px solid;
@@ -565,8 +547,26 @@ h2 {
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
 
+.scheduled-card[draggable="true"] {
+  cursor: grab;
+}
+
+.scheduled-card[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.72;
+}
+
 .view-mode .scheduled-card {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.view-mode .scheduled-main .activity-heading {
+  display: block;
+}
+
+.view-mode .scheduled-main .activity-heading .emoji-mark {
+  margin-right: 4px;
+  vertical-align: middle;
 }
 
 .scheduled-main {
@@ -602,15 +602,40 @@ div.scheduled-main {
   overflow-wrap: anywhere;
 }
 
-.scheduled-actions {
+.tile-actions {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 0;
 }
 
-.scheduled-actions .icon-button {
-  min-width: 28px;
-  min-height: 28px;
+.tile-action {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.tile-action-edit {
+  color: #64748b;
+}
+
+.tile-action-edit:hover {
+  color: #0f172a;
+}
+
+.tile-action-delete {
+  color: #dc2626;
+}
+
+.tile-action-delete:hover {
+  color: #991b1b;
+}
+
+.tile-action:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .delete-confirm-panel {
@@ -663,12 +688,82 @@ div.scheduled-main {
   background: #fee2e2;
 }
 
-.editor-panel {
-  margin-top: 18px;
-  padding: 16px;
+.modal-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+}
+
+.editor-modal {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+  padding: 20px;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+}
+
+.editor-modal-heading {
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.editor-help {
+  margin: 14px 0;
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.modal-close-button {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 7px;
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.modal-close-button:hover,
+.modal-close-button:focus-visible {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.editor-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.secondary-action {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #d8dee9;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #334155;
+}
+
+.secondary-action:hover {
   background: #f8fafc;
+}
+
+.editor-modal-actions .primary-action {
+  min-width: 140px;
+  margin-top: 0;
+  padding: 0 16px;
 }
 
 .editor-grid {
@@ -1137,7 +1232,7 @@ fieldset {
 .activity-card {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 4px;
   padding: 12px;
   border: 1px solid #e5e7eb;
   border-left: 5px solid;
@@ -1152,17 +1247,6 @@ fieldset {
   background: transparent;
   color: inherit;
   text-align: left;
-}
-
-.activity-card.selected-template {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.12);
-}
-
-.activity-card-main:focus-visible {
-  border-radius: 5px;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 
 .activity-card h3 {
@@ -1216,26 +1300,28 @@ fieldset {
 
 @media (max-width: 1050px) {
   .planner-toolbar {
-    align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
   }
 
   .month-nav {
+    grid-column: 1 / -1;
     justify-content: space-between;
   }
 
   .toolbar-actions {
-    flex-wrap: wrap;
-    justify-content: stretch;
+    grid-column: 1;
+    justify-content: flex-end;
   }
 
   .toolbar-actions .menu-cluster,
   .toolbar-actions .icon-menu-button {
-    flex: 1;
+    flex: 0 0 auto;
   }
 
   .toolbar-actions .icon-menu-button {
-    width: 100%;
+    width: 38px;
   }
 
   .planner-workspace {
@@ -1247,9 +1333,58 @@ fieldset {
   }
 }
 
+@media (min-width: 721px) and (max-width: 1050px) {
+  .planner-toolbar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .month-nav {
+    grid-column: 1;
+  }
+
+  .toolbar-actions {
+    grid-column: 2;
+  }
+
+  .week-grid,
+  .view-mode .week-grid {
+    grid-template-columns: repeat(7, minmax(144px, 1fr));
+  }
+
+  .month-grid {
+    grid-template-columns: repeat(7, minmax(112px, 1fr));
+  }
+
+  .week-grid,
+  .month-grid {
+    overscroll-behavior-x: contain;
+    padding-bottom: 8px;
+    scrollbar-color: #cbd5e1 transparent;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+
+  .week-grid .day-cell,
+  .month-grid .day-cell {
+    scroll-snap-align: start;
+  }
+
+  .view-mode .day-cell {
+    min-height: 320px;
+  }
+
+  .view-mode .calendar-surface {
+    min-height: 0;
+  }
+
+  .view-mode .month-day {
+    min-height: 150px;
+  }
+}
+
 @media (max-width: 720px) {
   .planner-shell {
-    padding: 18px;
+    padding: 14px;
   }
 
   .planner-hero {
@@ -1261,9 +1396,39 @@ fieldset {
     min-width: 0;
   }
 
+  .month-nav {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+  }
+
+  .calendar-surface,
+  .view-mode .calendar-surface {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .calendar-view-header {
+    flex-wrap: wrap;
+  }
+
+  .week-heading {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .week-nav {
+    margin-left: auto;
+  }
+
   .week-grid,
+  .view-mode .week-grid,
   .month-grid {
-    grid-template-columns: repeat(7, minmax(72px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: visible;
+  }
+
+  .month-grid .weekday-heading,
+  .month-grid .outside-month {
+    display: none;
   }
 
   .editor-grid {
@@ -1287,12 +1452,20 @@ fieldset {
     grid-column: auto;
   }
 
-  .day-cell {
-    min-height: 210px;
+  .editor-title-field,
+  .editor-time-entry {
+    grid-column: auto;
   }
 
-  .month-day {
-    min-height: 110px;
+  .editor-modal-actions .primary-action {
+    width: 100%;
+  }
+
+  .day-cell,
+  .view-mode .day-cell,
+  .month-day,
+  .view-mode .month-day {
+    min-height: 0;
   }
 }
 
