@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "astro dev --host 127.0.0.1 --port 4321 --strictPort",
     "build": "astro check && astro build",
     "preview": "astro preview",
     "test": "node --import tsx --test tests/*.test.mjs",
@@ -14,10 +14,10 @@
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.10",
     "@astrojs/node": "^11.1.5",
     "@astrojs/react": "^6.0.5",
-    "astro": "^7.3.1",
+    "astro": "^7.3.2",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.468.0",
     "postgres": "^3.4.9",
