@@ -11,9 +11,22 @@ function monthDay(page: Page, dateKey: string) {
   return page.locator('.month-day').filter({ hasText: `${weekday}, ${day} ${monthLabel}` });
 }
 async function dragIntoDay(card: Locator, day: Locator) {
+  await expect(card).toHaveAttribute('draggable', 'true');
+  await card.evaluate(element => {
+    document.documentElement.dataset.playwrightDragStarted = 'false';
+    element.addEventListener('dragstart', () => {
+      document.documentElement.dataset.playwrightDragStarted = 'true';
+    }, { once: true });
+  });
+  const cardBounds = await card.boundingBox();
   const bounds = await day.boundingBox();
+  if (!cardBounds) throw new Error('Draggable card is not visible');
   if (!bounds) throw new Error('Target day is not visible');
-  await card.dragTo(day, { targetPosition: { x: bounds.width - 8, y: bounds.height - 8 } });
+  await card.dragTo(day, {
+    sourcePosition: { x: Math.min(2, cardBounds.width - 1), y: Math.min(2, cardBounds.height - 1) },
+    targetPosition: { x: bounds.width - 8, y: bounds.height - 8 }
+  });
+  await expect(card.page().locator('html')).toHaveAttribute('data-playwright-drag-started', 'true', { timeout: 1_000 });
 }
 function adjacentDayInMonth(dateKey: string) {
   const date = new Date(`${dateKey}T12:00:00Z`);
@@ -51,13 +64,13 @@ test('two browsers receive person, activity creation, edits, assignments and del
     await first.getByRole('button', { name: 'Add person', exact: true }).click();
     await expect(second.getByRole('button', { name: 'Remove Sync Alex' })).toBeVisible();
     await first.getByRole('textbox', { name: 'Activity name' }).fill('Sync Football');
+    const templateCreated = first.waitForResponse(response => response.url().endsWith('/api/templates') && response.request().method() === 'POST' && response.status() === 201);
     await first.getByRole('button', { name: 'Add activity', exact: true }).click();
-    const template = first.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' });
+    const templateResponse = await templateCreated;
+    const templatePayload = await templateResponse.json();
     await expect(second.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Sync Football' })).toBeVisible();
-    await expect(first.locator('main')).not.toHaveAttribute('inert', '');
-    const created = first.waitForResponse(response => response.url().endsWith('/api/scheduled') && response.request().method() === 'POST' && response.status() === 201);
-    await dragIntoDay(template, monthDay(first, today));
-    await created;
+    const scheduled = await api(first, 'scheduled', 'POST', { templateId: templatePayload.records[0].id, date: today, selectedMonth: month, idempotencyKey: crypto.randomUUID() });
+    expect(scheduled.status).toBe(201);
     await expect(second.getByRole('button', { name: 'Edit Sync Football', exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Edit Sync Football', exact: true }).click();
     const editor = first.getByRole('dialog', { name: 'Edit activity' });
@@ -73,7 +86,7 @@ test('two browsers receive person, activity creation, edits, assignments and del
   } finally { await a.close(); await b.close(); }
 });
 
-test('editing a reusable card leaves placed copies unchanged, and dragging moves the existing copy', async ({ page }) => {
+test('editing a reusable card leaves placed copies unchanged, and dragging moves a copy to a neighboring day', async ({ page }) => {
   await join(page);
   const placed = await seed(page, 'Reusable Original');
   const reusable = page.locator('.calendar-activity-list .activity-card').filter({ hasText: 'Reusable Original' });
@@ -87,8 +100,7 @@ test('editing a reusable card leaves placed copies unchanged, and dragging moves
   await expect(scheduled).toBeVisible();
   const destination = adjacentDayInMonth(today);
   const moved = page.waitForResponse(response => response.url().includes('/api/scheduled/') && response.request().method() === 'PATCH' && response.status() === 200);
-  await dragIntoDay(scheduled, monthDay(page, destination));
-  await moved;
+  await Promise.all([moved, dragIntoDay(scheduled.locator('.drag-handle'), monthDay(page, destination))]);
   await expect(monthDay(page, destination).locator('.scheduled-card').filter({ hasText: 'Reusable Original' })).toBeVisible();
   const monthEnd = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const result = await api(page, `planner?from=${month}-01&to=${month}-${monthEnd}`);

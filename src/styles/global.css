@@ -537,7 +537,7 @@ h2 {
 
 .scheduled-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 2px;
   padding: 8px;
   border: 1px solid #e5e7eb;
@@ -545,15 +545,6 @@ h2 {
   border-radius: 7px;
   background: #ffffff;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
-}
-
-.scheduled-card[draggable="true"] {
-  cursor: grab;
-}
-
-.scheduled-card[draggable="true"]:active {
-  cursor: grabbing;
-  opacity: 0.72;
 }
 
 .view-mode .scheduled-card {
@@ -606,6 +597,23 @@ div.scheduled-main {
   display: grid;
   align-content: start;
   gap: 0;
+}
+
+.drag-handle {
+  display: grid;
+  width: 20px;
+  min-height: 24px;
+  align-self: stretch;
+  place-items: center;
+  color: #94a3b8;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:active {
+  color: #475569;
+  cursor: grabbing;
 }
 
 .tile-action {
@@ -1231,7 +1239,7 @@ fieldset {
 
 .activity-card {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 4px;
   padding: 12px;
   border: 1px solid #e5e7eb;
@@ -1260,14 +1268,6 @@ fieldset {
   margin: 8px 0 0;
   color: #64748b;
   font-size: 0.86rem;
-}
-
-.activity-card[draggable="true"] {
-  cursor: grab;
-}
-
-.activity-card[draggable="true"]:active {
-  cursor: grabbing;
 }
 
 .calendar-activity-list .activity-card {
