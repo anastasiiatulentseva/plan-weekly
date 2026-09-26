@@ -5,6 +5,7 @@ import {
   Clock3,
   Copy,
   Eye,
+  GripVertical,
   Pencil,
   Plus,
   Printer,
@@ -264,9 +265,11 @@ export default function PlannerApp() {
   function allowDrop(event: {
     preventDefault: () => void;
     currentTarget: HTMLElement;
+    dataTransfer: DataTransfer;
   }) {
     if (!isEditMode) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = event.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
     event.currentTarget.classList.add("drop-ready");
   }
 
@@ -554,11 +557,19 @@ export default function PlannerApp() {
     return (
       <article
         className="scheduled-card"
-        draggable={isEditMode}
         key={activity.id}
-        onDragStart={(event) => beginScheduledActivityDrag(event, activity.id)}
         style={{ borderLeftColor: activity.color }}
       >
+        {isEditMode ? (
+          <span
+            aria-label={`Drag scheduled ${activity.title}`}
+            className="drag-handle"
+            draggable="true"
+            onDragStart={(event) => beginScheduledActivityDrag(event, activity.id)}
+          >
+            <GripVertical aria-hidden="true" size={14} />
+          </span>
+        ) : null}
         {isEditMode ? (
           <button
             className="scheduled-main"
@@ -600,11 +611,17 @@ export default function PlannerApp() {
     return (
       <article
         className="activity-card"
-        draggable={isEditMode}
         key={activity.id}
-        onDragStart={(event) => beginActivityDrag(event, activity.id)}
         style={{ borderLeftColor: activity.color }}
       >
+        <span
+          aria-label={`Drag reusable ${activity.title}`}
+          className="drag-handle"
+          draggable="true"
+          onDragStart={(event) => beginActivityDrag(event, activity.id)}
+        >
+          <GripVertical aria-hidden="true" size={14} />
+        </span>
         <div className="activity-card-main">
           <h3 className="activity-heading">
             {activity.icon ? (
