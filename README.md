@@ -121,7 +121,7 @@ than replacing an older major's image against its existing data directory.
 
 Set repository secrets `COOLIFY_WEBHOOK` (the existing application deployment URL)
 and `COOLIFY_TOKEN` (a token allowed to deploy that application). The deploy job fails
-clearly when either is missing. Its only Coolify operation is a GET to that webhook,
+clearly when either is missing. Its only Coolify operation is a POST to that webhook,
 with three retries and a bearer token. Response bodies are discarded. Do not enable
 shell tracing, HTTP header/body logging, or proxy cookie logging around these secrets.
 

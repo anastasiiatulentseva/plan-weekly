@@ -94,5 +94,5 @@ jobs:
           fi
           curl --fail --show-error --silent --output /dev/null \
             --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 60 \
-            --request GET "$COOLIFY_WEBHOOK" \
+            --request POST "$COOLIFY_WEBHOOK" \
             --header "Authorization: Bearer $COOLIFY_TOKEN"
