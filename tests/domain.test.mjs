@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { isTimeRangeValid, isFutureRecurringMatch, remapDateByWeekPattern } from '../src/shared/planner.ts';
 import { extractPreferences } from '../src/shared/preferences.ts';
-import { dateKey, rangeInput, templateInput, templateUpdateInput, updateInput } from '../src/server/validation.ts';
+import { dateKey, personInput, rangeInput, scheduleInput, templateInput, templateUpdateInput, updateInput } from '../src/server/validation.ts';
 import { authenticated, signSession, sessionCookie, cookieName } from '../src/server/security.ts';
 
 test('time ranges allow missing endpoints and equality, reject reversed times', () => {
@@ -23,6 +24,12 @@ test('dates, ranges, duplicate assignments and unsafe colors are validated', () 
   assert.equal(rangeInput.safeParse({ from: '2026-01-01', to: '2026-12-31' }).success, false);
   assert.equal(templateInput.safeParse({ title: 'Sport', color: 'url(bad)', personIds: [] }).success, false);
   assert.equal(templateInput.safeParse({ title: 'Sport', color: '#abcdef', personIds: ['a', 'a'] }).success, false);
+});
+test('API validators accept generated idempotency keys and reject malformed keys', () => {
+  const key = randomUUID();
+  assert.equal(personInput.safeParse({ name: 'Ada', idempotencyKey: key }).success, true);
+  assert.equal(personInput.safeParse({ name: 'Ada', idempotencyKey: 'invalid' }).success, false);
+  assert.equal(scheduleInput.safeParse({ templateId: 'template', date: '2026-10-24', selectedMonth: '2026-10', idempotencyKey: key }).success, true);
 });
 test('future deletion includes selected date and linked cloned months but not other series', () => {
   const target = { id: 'a', date: '2026-09-15', recurrenceId: 'series' };
